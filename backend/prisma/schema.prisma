@@ -63,4 +63,15 @@ model Endpoint {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   createdAt   DateTime  @default(now())
+  requests    WebhookRequest[]
+}
+
+model WebhookRequest {
+  id         String   @id @default(cuid())
+  endpointId String
+  endpoint   Endpoint @relation(fields: [endpointId], references: [id])
+  method     String
+  headers    Json
+  body       Json?
+  receivedAt DateTime @default(now())
 }
