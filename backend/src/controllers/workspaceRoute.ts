@@ -3,10 +3,11 @@ import { prisma } from "../lib/prisma";
 
 export async function workspaceFunc(req: Request, res: Response) {
     try {
-        const { name, ownerId } = await req.body
+        const userId = req .userId
+        const { name } = await req.body
         const createworkspace = await prisma.workspace.create({
             data: {
-                name, ownerId
+                name, ownerId: userId as string
             }
         })
         res.status(201).json(createworkspace)
@@ -18,8 +19,7 @@ export async function workspaceFunc(req: Request, res: Response) {
 
 export async function getworkspace(req: Request, res: Response) {
     try {
-        const { userId } = req.params
-        console.log(userId)
+        const userId = req .userId
         const getworkspaces = await prisma.workspace.findMany({ where: { ownerId: userId as string } })
         res.status(200).json(getworkspaces)
     } catch (error) {

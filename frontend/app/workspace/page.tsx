@@ -20,12 +20,11 @@ export default function WorkspacePage() {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const userId = "cmt5jcmwt0000izpdt5r2v3k0";
 
   const fetchWorkspaces = async () => {
     try {
       setLoading(true);
-      const data = await apiFetch(`/webhook/api/workspaces/${userId}`, { method: 'GET' });
+      const data = await apiFetch(`/webhook/api/workspaces`, { method: 'GET' });
       setWorkspaces(data);
       setError(null);
     } catch (err) {
@@ -46,7 +45,7 @@ export default function WorkspacePage() {
       setCreating(true);
       await apiFetch('/webhook/api/workspace', {
         method: 'POST',
-        body: JSON.stringify({ name: newWorkspaceName.trim(), ownerId: userId }),
+        body: JSON.stringify({ name: newWorkspaceName.trim()}),
       });
       setNewWorkspaceName("");
       setShowCreateModal(false);

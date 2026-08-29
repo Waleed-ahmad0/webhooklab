@@ -29,12 +29,12 @@ export default function Page() {
         }
         console.log(email, firstName, lastName)
         try {
-            const res = await fetch(`http://localhost:4000/webhook/${firstName + email}`, {
+            const res = await fetch(`http://localhost:4000/api/register`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ email, workspaceId: password, name: firstName +lastName })
+                body: JSON.stringify({ email, password, firstName, lastName })
             })
 
             const data = await res.json()
@@ -45,7 +45,7 @@ export default function Page() {
                 throw new Error(data.error)
 
             } else {
-                // router.push('/login')
+                router.push('/login')
             }
         } catch (error) {
             console.error("Error:", error)
