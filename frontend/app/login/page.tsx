@@ -16,7 +16,7 @@ export default function Page() {
     if (gettoken) {
       router.replace('/workspace')
     }
-setIsLoading(false)
+    setIsLoading(false)
   }, [])
 
   const router = useRouter();
@@ -34,28 +34,26 @@ setIsLoading(false)
         method: 'POST',
         body: JSON.stringify({ email, password })
       })
-      
+      localStorage.setItem('token', res.token)
       console.log(res)
-      if (res.error || res.message) {
-        setError(res.error || res.message);
-      } else if (res.token) {
-        localStorage.setItem('token', res.token)
-        router.replace('/workspace')
+      if (res.error) {
+        setError(res.error);
       } else {
-        setError("Unexpected response from server");
+        setTimeout(() => { }, 1000);
+        router.replace('/workspace')
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Login failed:", err);
-      setError(err.message || String(err));
+      setError(err as string);
     } finally {
       setIsLoading(false);
     }
   };
-if (isLoading) {
-  return (
-    <div>loading plzz wait.............</div>
-  )
-}
+  if (isLoading) {
+    return (
+      <div>loading plzz wait.............</div>
+    )
+  }
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 via-indigo-50 to-blue-50 px-4 py-12">
       <div className="w-full max-w-md">

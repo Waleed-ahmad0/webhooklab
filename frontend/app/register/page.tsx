@@ -34,18 +34,18 @@ export default function Page() {
                 body: JSON.stringify({ email, password, firstName, lastName })
             })
 
-            const data = await res.json()
+           
 
             if (!res.ok) {
-                console.log(data.error, res)
-                seterror(typeof data.error === 'string' ? data.error : JSON.stringify(data.error))
-                return;
+                console.log(res.error, res)
+                seterror(res.error)
+                throw new Error(res.error)
+
             } else {
                 router.push('/login')
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error:", error)
-            seterror(error.message || String(error))
         }
     }
 
