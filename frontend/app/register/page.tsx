@@ -38,14 +38,14 @@ export default function Page() {
 
             if (!res.ok) {
                 console.log(data.error, res)
-                seterror(data.error)
-                throw new Error(data.error)
-
+                seterror(typeof data.error === 'string' ? data.error : JSON.stringify(data.error))
+                return;
             } else {
                 router.push('/login')
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error:", error)
+            seterror(error.message || String(error))
         }
     }
 

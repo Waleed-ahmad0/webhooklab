@@ -34,17 +34,19 @@ setIsLoading(false)
         method: 'POST',
         body: JSON.stringify({ email, password })
       })
-      localStorage.setItem('token', res.token)
+      
       console.log(res)
-      if (res.error) {
-        setError(res.error);
-      } else {
-        setTimeout(() => { }, 1000);
+      if (res.error || res.message) {
+        setError(res.error || res.message);
+      } else if (res.token) {
+        localStorage.setItem('token', res.token)
         router.replace('/workspace')
+      } else {
+        setError("Unexpected response from server");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Login failed:", err);
-      setError(err as string);
+      setError(err.message || String(err));
     } finally {
       setIsLoading(false);
     }
