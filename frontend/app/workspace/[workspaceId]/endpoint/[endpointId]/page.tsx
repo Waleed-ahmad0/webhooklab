@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface WebhookRequest {
   id: string;
@@ -34,6 +35,9 @@ export default function EndpointDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<WebhookRequest | null>(null);
   const [activeTab, setActiveTab] = useState<'headers' | 'body'>('body');
+  const [targetUrl, setTargetUrl] = useState('');
+  const [replaying, setReplaying] = useState(false);
+  const [replayResult, setReplayResult] = useState<string | null>(null);
 
   const fetchRequests = async () => {
     try {
@@ -87,15 +91,26 @@ export default function EndpointDetailPage() {
     if (minutes > 0) return `${minutes}m ago`;
     return `${seconds}s ago`;
   };
-const replayfetch= async () => {
-  const sendreq= await apiFetch('/webhook/api/request/cmt8ldwn70005izllks0413qw/replay', {
+  const replayfetch = async () => {
+    if (!selectedRequest || !targetUrl.trim()) return;
+    try {
+      setReplaying(true);
+      setReplayResult(null);
+      const res = await apiFetch(`/webhook/api/request/${selectedRequest.id}/replay`, {
         method: 'POST',
-        body: JSON.stringify({targetUrl : '/webhook/api/h/cmt8czlex0003izs0anp090zq'}),
-      } )
-      
-      console.log(sendreq)
-}
+        body: JSON.stringify({ targetUrl: targetUrl.trim() }),
+      });
+      setReplayResult('Replayed successfully');
+      console.log(res);
+    } catch (err) {
+      setReplayResult('Replay failed');
+      console.error(err);
+    } finally {
+      setReplaying(false);
+    }
+  };
   return (
+    <ProtectedRoute>
     <div className="min-h-screen bg-[#09090b] text-white relative overflow-hidden">
       {/* Background ambient glow */}
       <div className="pointer-events-none fixed inset-0">
@@ -127,15 +142,7 @@ const replayfetch= async () => {
               </svg>
               Refresh
             </button>
-            <button
-              onClick={replayfetch}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition-all cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
-              </svg>
-              replay
-            </button>
+
           </div>
         </div>
       </header>
@@ -258,6 +265,44 @@ const replayfetch= async () => {
                     </div>
                   </div>
 
+                  {/* Replay Section */}
+                  <div className="mb-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">Replay Request</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={targetUrl}
+                        onChange={(e) => { setTargetUrl(e.target.value); setReplayResult(null); }}
+                        placeholder="https://your-target-url.com/webhook"
+                        className="flex-1 px-3 py-2 text-sm font-mono bg-black/40 border border-white/[0.08] rounded-lg text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                      />
+                      <button
+                        onClick={replayfetch}
+                        disabled={replaying || !targetUrl.trim()}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-300 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                      >
+                        {replaying ? (
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
+                          </svg>
+                        )}
+                        {replaying ? 'Replaying…' : 'Replay'}
+                      </button>
+                    </div>
+                    {replayResult && (
+                      <p className={`mt-2 text-xs font-medium ${
+                        replayResult.includes('success') ? 'text-emerald-400' : 'text-red-400'
+                      }`}>
+                        {replayResult}
+                      </p>
+                    )}
+                  </div>
+
                   {/* Tabs */}
                   <div className="flex gap-1 mb-4 p-1 bg-white/[0.02] rounded-lg border border-white/[0.06] w-fit">
                     <button
@@ -324,5 +369,6 @@ const replayfetch= async () => {
         )}
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

@@ -1,8 +1,6 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
 export async function apiFetch(path: string, options?: RequestInit) {
   const token = localStorage.getItem('token')
-  console.log(token)
   const res = await fetch(`${API_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
@@ -11,10 +9,9 @@ export async function apiFetch(path: string, options?: RequestInit) {
     ...options,
   });
   const check = await res.json()
-
+  console.log(check)
   if (!res.ok) {
-    console.log(check.error)
-    throw new Error(`API error: ${res.status} `);
+    console.error(check.error, res.status)
   }
 
   return check;

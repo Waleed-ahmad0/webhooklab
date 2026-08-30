@@ -6,8 +6,6 @@ export const webhookendpoint = async (req: Request, res: Response) => {
   try {
 
     const userId = req.userId
-    const body = req.body
-    console.log(body)
     const { name, workspaceId } = req.body
 
     const findworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })

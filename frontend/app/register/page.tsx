@@ -1,5 +1,6 @@
 'use client'
 
+import { apiFetch } from '@/lib/api'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import React, { useState } from 'react'
@@ -19,7 +20,7 @@ export default function Page() {
             seterror("email is invalid")
             return
         }
-        if (email.trim() === "" || password.trim() === "" || confirmpassword.trim() === "") {
+        if (email.trim() === "" || password.trim().length < 7 || confirmpassword.trim().length < 7) {
             seterror("email or password is missing")
             return
         }
@@ -27,13 +28,9 @@ export default function Page() {
             alert("password not match")
             return
         }
-        console.log(email, firstName, lastName)
         try {
-            const res = await fetch(`http://localhost:4000/api/register`, {
+            const res = await apiFetch('/api/register', {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
                 body: JSON.stringify({ email, password, firstName, lastName })
             })
 

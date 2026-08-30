@@ -20,7 +20,8 @@ export async function workspaceFunc(req: Request, res: Response) {
 export async function getworkspace(req: Request, res: Response) {
     try {
         const userId = req .userId
-        const getworkspaces = await prisma.workspace.findMany({ where: { ownerId: userId as string } })
+        
+        const getworkspaces = await prisma.workspace.findMany({ where: { ownerId: userId } })
         res.status(200).json(getworkspaces)
     } catch (error) {
         console.error(error)

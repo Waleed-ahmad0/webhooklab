@@ -3,6 +3,7 @@
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface Workspace {
   id: string;
@@ -25,6 +26,7 @@ export default function WorkspacePage() {
     try {
       setLoading(true);
       const data = await apiFetch(`/webhook/api/workspaces`, { method: 'GET' });
+      console.log(data)
       setWorkspaces(data);
       setError(null);
     } catch (err) {
@@ -45,7 +47,7 @@ export default function WorkspacePage() {
       setCreating(true);
       await apiFetch('/webhook/api/workspace', {
         method: 'POST',
-        body: JSON.stringify({ name: newWorkspaceName.trim()}),
+        body: JSON.stringify({ name: newWorkspaceName.trim() }),
       });
       setNewWorkspaceName("");
       setShowCreateModal(false);
@@ -66,6 +68,7 @@ export default function WorkspacePage() {
   };
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen bg-[#09090b] text-white relative overflow-hidden">
       {/* Background ambient glow */}
       <div className="pointer-events-none fixed inset-0">
@@ -315,7 +318,7 @@ export default function WorkspacePage() {
       )}
 
       {/* Modal animation keyframes */}
-      <style jsx>{`
+      <style>{`
         @keyframes modalIn {
           from {
             opacity: 0;
@@ -328,5 +331,6 @@ export default function WorkspacePage() {
         }
       `}</style>
     </div>
+    </ProtectedRoute>
   );
 }

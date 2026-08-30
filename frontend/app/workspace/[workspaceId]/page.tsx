@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface Endpoint {
   id: string;
@@ -84,6 +85,7 @@ export default function WorkspaceDetailPage() {
   };
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen bg-[#09090b] text-white relative overflow-hidden">
       {/* Background ambient glow */}
       <div className="pointer-events-none fixed inset-0">
@@ -351,5 +353,6 @@ export default function WorkspaceDetailPage() {
         }
       `}</style>
     </div>
+    </ProtectedRoute>
   );
 }

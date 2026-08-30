@@ -9,8 +9,15 @@ export default function Page() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadingProvider] = useState<string | null>(null);
+  useEffect(() => {
+    const gettoken = localStorage.getItem('token')
+    if (gettoken) {
+      router.replace('/workspace')
+    }
+setIsLoading(false)
+  }, [])
 
   const router = useRouter();
   const handlesubmit = async (e: React.FormEvent) => {
@@ -30,19 +37,23 @@ export default function Page() {
       localStorage.setItem('token', res.token)
       console.log(res)
       if (res.error) {
-        setError(error);
+        setError(res.error);
       } else {
         setTimeout(() => { }, 1000);
-router.replace('/workspace')
+        router.replace('/workspace')
       }
     } catch (err) {
       console.error("Login failed:", err);
-      setError("An unexpected error occurred");
+      setError(err as string);
     } finally {
       setIsLoading(false);
     }
   };
-  
+if (isLoading) {
+  return (
+    <div>loading plzz wait.............</div>
+  )
+}
   return (
     <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 via-indigo-50 to-blue-50 px-4 py-12">
       <div className="w-full max-w-md">
@@ -127,8 +138,8 @@ router.replace('/workspace')
                   //   onClick={() => handleSocialLogin(provider)}
                   disabled={loadingProvider !== null}
                   className={`w-full flex items-center justify-center gap-3 px-4 py-3 border rounded-lg transition-all duration-200 ${loadingProvider === provider
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
                     } ${provider === "google"
                       ? "border-gray-300 bg-white hover:border-blue-500 hover:bg-gray-50"
                       : provider === "discord"
