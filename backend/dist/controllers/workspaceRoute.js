@@ -5,10 +5,11 @@ exports.getworkspace = getworkspace;
 const prisma_1 = require("../lib/prisma");
 async function workspaceFunc(req, res) {
     try {
-        const { name, ownerId } = await req.body;
+        const userId = req.userId;
+        const { name } = await req.body;
         const createworkspace = await prisma_1.prisma.workspace.create({
             data: {
-                name, ownerId
+                name, ownerId: userId
             }
         });
         res.status(201).json(createworkspace);
@@ -20,8 +21,7 @@ async function workspaceFunc(req, res) {
 }
 async function getworkspace(req, res) {
     try {
-        const { userId } = req.params;
-        console.log(userId);
+        const userId = req.userId;
         const getworkspaces = await prisma_1.prisma.workspace.findMany({ where: { ownerId: userId } });
         res.status(200).json(getworkspaces);
     }
