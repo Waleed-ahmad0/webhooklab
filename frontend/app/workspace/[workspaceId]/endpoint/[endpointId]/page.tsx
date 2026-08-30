@@ -101,7 +101,6 @@ export default function EndpointDetailPage() {
         body: JSON.stringify({ targetUrl: targetUrl.trim() }),
       });
       setReplayResult('Replayed successfully');
-      console.log(res);
     } catch (err) {
       setReplayResult('Replay failed');
       console.error(err);

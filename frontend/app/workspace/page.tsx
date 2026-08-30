@@ -26,7 +26,6 @@ export default function WorkspacePage() {
     try {
       setLoading(true);
       const data = await apiFetch(`/webhook/api/workspaces`, { method: 'GET' });
-      console.log(data)
       setWorkspaces(data);
       setError(null);
     } catch (err) {

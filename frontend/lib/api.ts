@@ -9,7 +9,6 @@ export async function apiFetch(path: string, options?: RequestInit) {
     ...options,
   });
   const check = await res.json()
-  console.log(check)
   if (!res.ok) {
     console.error(check.error, res.status)
   }
