@@ -35,7 +35,6 @@ export default function Page() {
         body: JSON.stringify({ email, password })
       })
       localStorage.setItem('token', res.token)
-      console.log(res)
       if (res.error) {
         setError(res.error);
       } else {

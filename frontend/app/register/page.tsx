@@ -37,7 +37,6 @@ export default function Page() {
            
 
             if (!res.ok) {
-                console.log(res.error, res)
                 seterror(res.error)
                 throw new Error(res.error)
 
