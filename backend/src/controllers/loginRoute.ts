@@ -27,9 +27,7 @@ export default async function login(req: Request, res: Response) {
             process.env.JWT_SECRET!,
             { expiresIn: "7d" }
         );
-        // console.log(check_password, password, finduser.password)
-
-        // console.log(finduser)
+        
         res.status(200).json({ token, finduser });
     } catch (error) {
         console.error(error)

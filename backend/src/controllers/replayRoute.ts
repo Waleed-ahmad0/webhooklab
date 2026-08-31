@@ -12,7 +12,6 @@ export const replayRequest = async (req: Request, res: Response) => {
             where: { id: requestId as string },
         });
 
-        // console.log(storedRequest, storedRequest?.body)
 
         if (!storedRequest) {
             return res.status(404).json({ error: "Request not found" });
@@ -36,7 +35,6 @@ export const replayRequest = async (req: Request, res: Response) => {
             headers: headersToReplay,
             body: storedRequest.body ? JSON.stringify(storedRequest.body) : undefined,
         });
-        console.log('founded', replayResponse)
         res.status(200).json({
             replayed: true,
             targetStatus: replayResponse.status,

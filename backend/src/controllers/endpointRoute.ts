@@ -9,7 +9,6 @@ export const webhookendpoint = async (req: Request, res: Response) => {
     const { name, workspaceId } = req.body
 
     const findworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
-    console.log(findworkspace)
     if (findworkspace?.ownerId !== userId) {
       return res.status(401).json({ error: 'unauthorized' })
     }
