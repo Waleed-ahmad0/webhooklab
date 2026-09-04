@@ -80,26 +80,46 @@ export const authConfig = {
     maxAge: 30 * 24 * 60 * 60,
   },
 
-  cookies: {
-    csrfToken: {
-      name: "authjs.csrf-token",
-      options: {
-        httpOnly: true,
-        sameSite: "none" as const,
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      },
-    },
-    sessionToken: {
-      name: "authjs.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "none" as const,
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      },
+ cookies: {
+  csrfToken: {
+    name: "authjs.csrf-token",
+    options: {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: true,
+      path: "/",
     },
   },
+  sessionToken: {
+    name: "authjs.session-token",
+    options: {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: true,
+      path: "/",
+    },
+  },
+  pkceCodeVerifier: {
+    name: "authjs.pkce.code_verifier",
+    options: {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: true,
+      path: "/",
+      maxAge: 900,
+    },
+  },
+  state: {
+    name: "authjs.state",
+    options: {
+      httpOnly: true,
+      sameSite: "lax" as const,
+      secure: true,
+      path: "/",
+      maxAge: 900,
+    },
+  },
+},
 
 
   callbacks: {
