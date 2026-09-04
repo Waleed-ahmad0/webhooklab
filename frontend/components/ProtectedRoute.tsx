@@ -1,22 +1,22 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+'use client'
+import { useEffect, useState } from "react";
+import { getSession } from "@/lib/api";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const [authorized, setAuthorized] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.replace('/login');
-    } else {
-      setAuthorized(true);
-    }
-  }, [router]);
+    getSession().then((session) => {
+      if (session) {
+        setAuthenticated(true);
+      } else {
+        window.location.href = "/login";
+      }
+      setLoading(false);
+    });
+  }, []);
 
-  if (!authorized) return null;
-
-  return <>{children}</>;
+  if (loading) return <div>Loading...</div>;
+  return authenticated ? <>{children}</> : null;
 }

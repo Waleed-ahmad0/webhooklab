@@ -3,51 +3,49 @@
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getSession } from "@/lib/api";
 
 export default function Page() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [csrfToken, setCsrfToken] = useState("");
+
   const [loadingProvider] = useState<string | null>(null);
   useEffect(() => {
-    const gettoken = localStorage.getItem('token')
-    if (gettoken) {
-      router.replace('/workspace')
-    }
-    setIsLoading(false)
-  }, [])
-
-  const router = useRouter();
-  const handlesubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    try {
-      setIsLoading(true);
-      setError(null);
-      if (email.trim() === "" || password.trim() === "") {
-        setError("fields are empty ");
-        return;
-      }
-      const res = await apiFetch('/api/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
-      })
-      localStorage.setItem('token', res.token)
-      if (res.error) {
-        setError(res.error);
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/csrf`, { credentials: "include" })
+      .then(res => res.json())
+      .then(data => setCsrfToken(data.csrfToken));
+    getSession().then((session) => {
+      if (session) {
+        router.replace("/workspace");
       } else {
-        setTimeout(() => { }, 1000);
-        router.replace('/workspace')
+        setIsLoading(false); // no session — show the login form
       }
-    } catch (err) {
-      console.error("Login failed:", err);
-      setError(err as string);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    });
+  }, []);
+  const router = useRouter();
+  async function handleSocialSignin(provider:string) {
+    console.log(provider)
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/csrf`, {
+      credentials: "include",
+    });
+    const { csrfToken } = await res.json();
+
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = `${process.env.NEXT_PUBLIC_API_URL}/auth/signin/${provider}`;
+
+    const csrfInput = document.createElement("input");
+    csrfInput.type = "hidden";
+    csrfInput.name = "csrfToken";
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+
+    document.body.appendChild(form);
+    form.submit();
+  }
   if (isLoading) {
     return (
       <div>loading plzz wait.............</div>
@@ -64,12 +62,14 @@ export default function Page() {
             <p className="text-gray-600">Sign in to your account</p>
           </div>
 
-          <form onSubmit={handlesubmit} className="space-y-5">
+          <form action={`${process.env.NEXT_PUBLIC_API_URL}/auth/callback/credentials`} method="POST" className="space-y-5">
+            <input type="hidden" name="csrfToken" value={csrfToken} />
             <div>
               <label
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
+
                 Email Address
               </label>
               <input
@@ -133,8 +133,11 @@ export default function Page() {
             <div className="space-y-3">
               {["google", "discord", "github"].map((provider) => (
                 <button
+                  onClick={() => {
+                    console.log(provider)
+                    handleSocialSignin(provider);
+                  }}
                   key={provider}
-                  //   onClick={() => handleSocialLogin(provider)}
                   disabled={loadingProvider !== null}
                   className={`w-full flex items-center justify-center gap-3 px-4 py-3 border rounded-lg transition-all duration-200 ${loadingProvider === provider
                     ? "opacity-50 cursor-not-allowed"
@@ -214,6 +217,6 @@ export default function Page() {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 }

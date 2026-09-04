@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { checkEndpointOwnership } from "../lib/authorizations";
+import { broadcastToEndpoint } from "../lib/sseClients";
 
 export const receiveWebhook = async (req: Request, res: Response) => {
   try {
@@ -8,7 +9,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
     const endpoint = await prisma.endpoint.findUnique({ where: { token: token as string } });
     if (!endpoint) return res.status(404).json({ error: "Endpoint not found" });
 
-    await prisma.webhookRequest.create({
+    const newRequest=await prisma.webhookRequest.create({
       data: {
         endpointId: endpoint.id,
         method: req.method,
@@ -16,6 +17,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
         body: req.body,
       },
     });
+    broadcastToEndpoint(endpoint.id, newRequest); 
 
     res.status(200).json({ received: true });
   } catch (error) {
@@ -34,7 +36,7 @@ export async function getawebhookrequest(req: Request, res: Response) {
     }
     const checkowner = await checkEndpointOwnership(getdetailrequest?.endpointId, userId)
     if ('error' in checkowner) {
-      return res.status(checkowner.status as number).json({error:checkowner.error})
+      return res.status(checkowner.status as number).json({ error: checkowner.error })
     }
     res.status(200).json(getdetailrequest)
   } catch (error) {
