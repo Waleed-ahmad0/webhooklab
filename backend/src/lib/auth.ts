@@ -85,7 +85,7 @@ export const authConfig = {
     name: "authjs.csrf-token",
     options: {
       httpOnly: true,
-      sameSite: "lax" as const,
+      sameSite: "none" as const,
       secure: true,
       path: "/",
     },
@@ -94,7 +94,7 @@ export const authConfig = {
     name: "authjs.session-token",
     options: {
       httpOnly: true,
-      sameSite: "lax" as const,
+      sameSite: "none" as const,
       secure: true,
       path: "/",
     },
@@ -103,7 +103,7 @@ export const authConfig = {
     name: "authjs.pkce.code_verifier",
     options: {
       httpOnly: true,
-      sameSite: "lax" as const,
+      sameSite: "none" as const,
       secure: true,
       path: "/",
       maxAge: 900,
@@ -113,7 +113,7 @@ export const authConfig = {
     name: "authjs.state",
     options: {
       httpOnly: true,
-      sameSite: "lax" as const,
+      sameSite: "none" as const,
       secure: true,
       path: "/",
       maxAge: 900,
