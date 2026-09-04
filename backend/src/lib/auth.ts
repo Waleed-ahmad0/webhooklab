@@ -6,14 +6,33 @@ import type { User, Account } from "@auth/core/types"
 import type { JWT } from "@auth/core/jwt"
 import type { AuthConfig } from "@auth/core"
 import Google from "@auth/express/providers/google"
-// Import type extensions
-// import "../types/auth.js"
+import Discord from "@auth/express/providers/discord"
+import Github from '@auth/express/providers/github'
+
 
 
 export const authConfig = {
   trustHost: true,
   providers: [
     Google({
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
+    }),
+    Discord({
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
+    }),
+    Github({
       authorization: {
         params: {
           prompt: "consent",
@@ -45,7 +64,6 @@ export const authConfig = {
 
         if (!valid) return null
 
-        // Return typed user object
         return {
           id: user.id.toString(),
           email: user.email,
@@ -97,12 +115,10 @@ export const authConfig = {
       account?: any | null;
       profile?: any;
     }) {
-      // For OAuth providers only
       if (account?.provider === "credentials") {
         return true;
       }
 
-      // Account should always exist for OAuth providers
       if (!account) {
         return false;
       }
@@ -155,46 +171,43 @@ export const authConfig = {
         return false;
       }
     },
-   async jwt({
-  token,
-  user,
-  account,
-  trigger,
-  session
-}: {
-  token: JWT
-  user?: User
-  account?: Account | null
-  trigger?: "signIn" | "signUp" | "update"
-  session?: any
-}) {
-  if (user) {
-    if (account?.provider && account.provider !== "credentials") {
-      // OAuth sign-in: re-fetch the real Prisma user by email
-      const dbUser = await prisma.user.findUnique({
-        where: { email: user.email! },
-      });
-      if (dbUser) {
-        token.id = dbUser.id;
-        token.email = dbUser.email;
-        token.firstName = dbUser.firstName;
-        token.lastName = dbUser.lastName ?? undefined;
-        token.profileImage = dbUser.profileImage ?? undefined;
-        token.authMethods = dbUser.authMethods;
+    async jwt({
+      token,
+      user,
+      account,
+      trigger,
+      session
+    }: {
+      token: JWT
+      user?: User
+      account?: Account | null
+      trigger?: "signIn" | "signUp" | "update"
+      session?: any
+    }) {
+      if (user) {
+        if (account?.provider && account.provider !== "credentials") {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: user.email! },
+          });
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.email = dbUser.email;
+            token.firstName = dbUser.firstName;
+            token.lastName = dbUser.lastName || '';
+            token.profileImage = dbUser.profileImage;
+            token.authMethods = dbUser.authMethods;
+          }
+        } else {
+          token.id = user.id
+          token.email = user.email
+          token.firstName = user.firstName
+          token.lastName = user.lastName
+          token.profileImage = user.profileImage
+          token.authMethods = user.authMethods
+        }
       }
-    } else {
-      // Credentials: user object already comes from authorize() with correct Prisma id
-      token.id = user.id
-      token.email = user.email
-      token.firstName = user.firstName
-      token.lastName = user.lastName
-      token.profileImage = user.profileImage
-      token.authMethods = user.authMethods
-    }
-  }
 
 
-      // Handle session updates
       if (trigger === "update" && session?.user) {
         const { id, firstName, lastName, profileImage, authMethods, ...rest } = session.user
         token = {
@@ -218,7 +231,6 @@ export const authConfig = {
       session: any
       token: JWT
     }) {
-      // Add custom fields from token to session
       if (session.user) {
         session.user.id = token.id as string
         session.user.firstName = token.firstName as string
