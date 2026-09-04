@@ -18,7 +18,7 @@ dotenv.config();
 const app = express();
 app.use(cookieParser());
 const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:3000"].filter(Boolean);
-app.use(cors({ origin: "http://localhost:3000", credentials: true }))
+app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }))
 app.set("trust proxy", true)
 app.use("/auth", ExpressAuth(authConfig))
 
