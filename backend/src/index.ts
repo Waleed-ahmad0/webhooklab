@@ -11,14 +11,13 @@ import { streamEndpointRequests } from "./controllers/SSEroute";
 import cookieParser from "cookie-parser";
 import { requireAuth } from "./middleware/requireAuth";
 import { authConfig } from "./lib/auth";
-import Google from "@auth/express/providers/google"
 
 dotenv.config();
 
 const app = express();
 app.use(cookieParser());
-const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:3000"].filter(Boolean);
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }))
+const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:3000"].filter(Boolean) as string[];
+app.use(cors({ origin: allowedOrigins, credentials: true }))
 app.set("trust proxy", true)
 app.use("/auth", ExpressAuth(authConfig))
 

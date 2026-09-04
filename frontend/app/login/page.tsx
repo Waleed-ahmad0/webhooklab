@@ -14,7 +14,7 @@ export default function Page() {
 
   const [loadingProvider] = useState<string | null>(null);
   useEffect(() => {
-    fetch(`/auth/csrf`, { credentials: "include" })
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/csrf`, { credentials: "include" })
       .then(res => res.json())
       .then(data => setCsrfToken(data.csrfToken));
     getSession().then((session) => {
@@ -28,14 +28,14 @@ export default function Page() {
   const router = useRouter();
   async function handleSocialSignin(provider:string) {
     console.log(provider)
-    const res = await fetch(`/auth/csrf`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/csrf`, {
       credentials: "include",
     });
     const { csrfToken } = await res.json();
 
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = `/auth/signin/${provider}`;
+    form.action = `${process.env.NEXT_PUBLIC_API_URL}/auth/signin/${provider}`;
 
     const csrfInput = document.createElement("input");
     csrfInput.type = "hidden";
@@ -62,7 +62,7 @@ export default function Page() {
             <p className="text-gray-600">Sign in to your account</p>
           </div>
 
-          <form action={`/auth/callback/credentials`} method="POST" className="space-y-5">
+          <form action={`${process.env.NEXT_PUBLIC_API_URL}/auth/callback/credentials`} method="POST" className="space-y-5">
             <input type="hidden" name="csrfToken" value={csrfToken} />
             <div>
               <label
