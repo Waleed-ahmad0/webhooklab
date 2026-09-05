@@ -1,6 +1,7 @@
 // next.config.ts
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
     return [
@@ -12,4 +13,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
