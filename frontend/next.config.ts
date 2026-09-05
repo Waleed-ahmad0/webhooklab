@@ -1,4 +1,3 @@
-// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -10,7 +9,11 @@ const nextConfig: NextConfig = {
         destination: `${backendUrl}/auth/:path*`,
       },
       {
-        source: "/api/:path*", 
+        source: "/webhook/:path*",
+        destination: `${backendUrl}/webhook/:path*`,
+      },
+      {
+        source: "/api/:path*",
         destination: `${backendUrl}/api/:path*`,
       },
     ];

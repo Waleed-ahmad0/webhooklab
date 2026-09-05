@@ -1,6 +1,6 @@
 export async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`${path}`, {
-    credentials: "include", 
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -18,9 +18,9 @@ export async function getSession() {
   const res = await fetch(`/auth/session`, {
     credentials: "include",
   });
-  if (!res.ok) return null; 
+  if (!res.ok) return null;
 
-  const data = await res.json().catch(() => null); 
+  const data = await res.json().catch(() => null);
 
   if (!data || typeof data !== "object") return null;
 
