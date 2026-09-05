@@ -10,11 +10,14 @@ import Discord from "@auth/express/providers/discord"
 import Github from '@auth/express/providers/github'
 
 
+const FRONTEND_URL = process.env.FRONTEND_URL!
 
 export const authConfig = {
+
   trustHost: true,
   providers: [
     Google({
+      redirectProxyUrl: `${FRONTEND_URL}/auth`,
       authorization: {
         params: {
           prompt: "consent",
@@ -24,6 +27,7 @@ export const authConfig = {
       },
     }),
     Discord({
+      redirectProxyUrl: `${FRONTEND_URL}/auth`,
       authorization: {
         params: {
           prompt: "consent",
@@ -33,6 +37,7 @@ export const authConfig = {
       },
     }),
     Github({
+      redirectProxyUrl: `${FRONTEND_URL}/auth`,
       authorization: {
         params: {
           prompt: "consent",
@@ -81,45 +86,45 @@ export const authConfig = {
   },
 
   cookies: {
-  csrfToken: {
-    name: "authjs.csrf-token",
-    options: {
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
+    csrfToken: {
+      name: "authjs.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      },
+    },
+    sessionToken: {
+      name: "authjs.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      },
+    },
+    pkceCodeVerifier: {
+      name: "authjs.pkce.code_verifier",
+      options: {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 900,
+      },
+    },
+    state: {
+      name: "authjs.state",
+      options: {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 900,
+      },
     },
   },
-  sessionToken: {
-    name: "authjs.session-token",
-    options: {
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-    },
-  },
-  pkceCodeVerifier: {
-    name: "authjs.pkce.code_verifier",
-    options: {
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 900,
-    },
-  },
-  state: {
-    name: "authjs.state",
-    options: {
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 900,
-    },
-  },
-},
 
 
   callbacks: {
