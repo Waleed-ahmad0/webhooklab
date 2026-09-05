@@ -80,13 +80,13 @@ export const authConfig = {
     maxAge: 30 * 24 * 60 * 60,
   },
 
- cookies: {
+  cookies: {
   csrfToken: {
     name: "authjs.csrf-token",
     options: {
       httpOnly: true,
-      sameSite: "none" as const,
-      secure: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
       path: "/",
     },
   },
@@ -94,8 +94,8 @@ export const authConfig = {
     name: "authjs.session-token",
     options: {
       httpOnly: true,
-      sameSite: "none" as const,
-      secure: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
       path: "/",
     },
   },
@@ -103,8 +103,8 @@ export const authConfig = {
     name: "authjs.pkce.code_verifier",
     options: {
       httpOnly: true,
-      sameSite: "none" as const,
-      secure: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 900,
     },
@@ -113,8 +113,8 @@ export const authConfig = {
     name: "authjs.state",
     options: {
       httpOnly: true,
-      sameSite: "none" as const,
-      secure: true,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 900,
     },
@@ -124,7 +124,7 @@ export const authConfig = {
 
   callbacks: {
     async redirect({ url, baseUrl }) {
-      return `${process.env.FRONTEND_URL}/workspace`
+      return `${process.env.AUTH_URL}/workspace`
     },
     async signIn({
       user,

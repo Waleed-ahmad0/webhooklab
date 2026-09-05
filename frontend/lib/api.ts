@@ -16,7 +16,7 @@ export async function apiFetch(path: string, options?: RequestInit) {
   return check;
 }
 export async function getSession() {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/session`, {
+  const res = await fetch(`/auth/session`, {
     credentials: "include",
   });
   if (!res.ok) return null; 
