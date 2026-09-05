@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { apiFetch, getSession } from "@/lib/api";
+import {  getSession } from "@/lib/api";
 
 export default function Page() {
   const [email, setEmail] = useState<string>("");
@@ -27,7 +27,6 @@ export default function Page() {
   }, []);
   const router = useRouter();
   async function handleSocialSignin(provider:string) {
-    console.log(provider)
     const res = await fetch(`/auth/csrf`, {
       credentials: "include",
     });
@@ -134,7 +133,6 @@ export default function Page() {
               {["google", "discord", "github"].map((provider) => (
                 <button
                   onClick={() => {
-                    console.log(provider)
                     handleSocialSignin(provider);
                   }}
                   key={provider}
