@@ -40,7 +40,8 @@ export default function EndpointDetailPage() {
   const [replayResult, setReplayResult] = useState<string | null>(null);
   useEffect(() => {
     const eventSource = new EventSource(
-      `/webhook/api/endpoint/${endpointId}/stream?`
+      `${process.env.NEXT_PUBLIC_API_URL}/webhook/api/endpoint/${endpointId}/stream`,
+      { withCredentials: true }
     );
 
     eventSource.onmessage = (event) => {
