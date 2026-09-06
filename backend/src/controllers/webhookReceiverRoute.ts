@@ -9,15 +9,19 @@ export const receiveWebhook = async (req: Request, res: Response) => {
     const endpoint = await prisma.endpoint.findUnique({ where: { token: token as string } });
     if (!endpoint) return res.status(404).json({ error: "Endpoint not found" });
 
-    const newRequest=await prisma.webhookRequest.create({
+    const newRequest = await prisma.webhookRequest.create({
       data: {
         endpointId: endpoint.id,
         method: req.method,
         headers: req.headers as any,
         body: req.body,
       },
+
     });
-    broadcastToEndpoint(endpoint.id, newRequest); 
+    console.log("METHOD:", req.method);
+    console.log("CONTENT TYPE:", req.headers["content-type"]);
+    console.log("BODY:", req.body);
+    broadcastToEndpoint(endpoint.id, newRequest);
 
     res.status(200).json({ received: true });
   } catch (error) {

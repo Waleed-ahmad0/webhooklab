@@ -1,152 +1,220 @@
-'use client'
+"use client";
 
-import { apiFetch } from '@/lib/api'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import React, { useState } from 'react'
+import { apiFetch } from "@/lib/api";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Zap, User, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
 
 export default function Page() {
-    const [email, setEmail] = useState<string>('')
-    const [password, setPassword] = useState<string>('')
-    const [firstName, setfirstName] = useState<string>('')
-    const [lastName, setlastName] = useState<string>('')
-    const [confirmpassword, setconfirmpassword] = useState<string>('')
-    const [error, seterror] = useState<string>('')
-    const router = useRouter()
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [firstName, setfirstName] = useState<string>("");
+  const [lastName, setlastName] = useState<string>("");
+  const [confirmpassword, setconfirmpassword] = useState<string>("");
+  const [error, seterror] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
 
-    const handlesumit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!email.includes('@gmail.com')) {
-            seterror("email is invalid")
-            return
-        }
-        if (email.trim() === "" || password.trim().length < 7 || confirmpassword.trim().length < 7) {
-            seterror("email or password is missing")
-            return
-        }
-        if (password !== confirmpassword) {
-            alert("password not match")
-            return
-        }
-        try {
-            const res = await apiFetch('/api/register', {
-                method: "POST",
-                body: JSON.stringify({ email, password, firstName, lastName })
-            })
-
-           
-
-            if (!res.ok) {
-                seterror(res.error)
-                throw new Error(res.error)
-
-            } else {
-                router.push('/login')
-            }
-        } catch (error) {
-            console.error("Error:", error)
-        }
+  const handlesumit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.includes("@gmail.com")) {
+      seterror("email is invalid");
+      return;
     }
+    if (
+      email.trim() === "" ||
+      password.trim().length < 7 ||
+      confirmpassword.trim().length < 7
+    ) {
+      seterror("email or password is missing");
+      return;
+    }
+    if (password !== confirmpassword) {
+      seterror("Passwords do not match");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const res = await apiFetch("/api/register", {
+        method: "POST",
+        body: JSON.stringify({ email, password, firstName, lastName }),
+      });
 
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 px-4 py-12">
-            <div className="w-full max-w-md">
-                <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-100 animate-fade-in-up">
-                    <div className="text-center mb-8">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
-                        <p className="text-gray-600">Sign up to get started</p>
-                    </div>
+      if (!res.ok) {
+        seterror(res.error);
+        throw new Error(res.error);
+      } else {
+        router.push("/login");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-                    <form onSubmit={handlesumit} className="space-y-5">
-                        <div>
-                            <label htmlFor="first name" className="block text-sm font-medium text-gray-700 mb-2">
-                                First Name
-                            </label>
-                            <input
-                                type="text"
-                                name="firstName"
-                                id="firstName"
-                                value={firstName}
-                                onChange={(e) => setfirstName(e.target.value)}
-                                placeholder='Enter your first name'
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder-gray-400"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                                Last Name
-                            </label>
-                            <input
-                                type="text"
-                                name="lastName"
-                                id="lastName"
-                                value={lastName}
-                                onChange={(e) => setlastName(e.target.value)}
-                                placeholder='Enter your last name'
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder-gray-400"
-                            />
-                        </div>
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                                Email Address
-                            </label>
-                            <input
-                                type="email"
-                                name="email"
-                                id="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder='Enter your email'
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder-gray-400"
-                            />
-                        </div>
+  return (
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden selection:bg-white/20">
+      {/* Background */}
+      <div className="pointer-events-none fixed inset-0 grid-pattern" />
 
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                                Password
-                            </label>
-                            <input
-                                type="password"
-                                name="password"
-                                id="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder='Enter your password'
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder-gray-400"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="confirmpassword" className="block text-sm font-medium text-gray-700 mb-2">
-                                Confirm Password
-                            </label>
-                            <input
-                                type="password"
-                                name="confirmpassword"
-                                id="confirmpassword"
-                                value={confirmpassword}
-                                onChange={(e) => setconfirmpassword(e.target.value)}
-                                placeholder='Confirm your password'
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder-gray-400"
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="w-full bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                        >
-                            Register
-                        </button>
-                    </form>
-                    <div className="text-red-500 text-center">{error}</div>
-                    <div className="mt-6 text-center text-sm text-gray-600">
-                        Already have an account?{' '}
-                        <Link href="/login" className="font-semibold text-blue-600 hover:text-blue-700 transition-colors">
-                            Login
-                        </Link>
-                    </div>
-                </div>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="w-full max-w-[420px] relative z-10"
+      >
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded bg-white flex items-center justify-center">
+              <Zap className="w-4 h-4 text-black" />
             </div>
+            <span className="text-lg font-medium tracking-tight text-white">
+              WebhookLab
+            </span>
+          </Link>
         </div>
-    )
+
+        <Card className="border-white/[0.1] bg-[#0A0A0A] rounded-xl shadow-2xl">
+          <CardHeader className="text-center pb-2 px-8 pt-8">
+            <CardTitle className="text-xl font-medium">Create Account</CardTitle>
+            <CardDescription className="text-zinc-400 mt-1">
+              Sign up to get started
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-8 pb-8 pt-6">
+            <form onSubmit={handlesumit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="firstName" className="text-xs text-zinc-400">First Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                    <Input
+                      type="text"
+                      name="firstName"
+                      id="firstName"
+                      value={firstName}
+                      onChange={(e) => setfirstName(e.target.value)}
+                      placeholder="John"
+                      className="pl-9 bg-[#111] border-white/[0.08]"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="lastName" className="text-xs text-zinc-400">Last Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                    <Input
+                      type="text"
+                      name="lastName"
+                      id="lastName"
+                      value={lastName}
+                      onChange={(e) => setlastName(e.target.value)}
+                      placeholder="Doe"
+                      className="pl-9 bg-[#111] border-white/[0.08]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs text-zinc-400">Email Address</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <Input
+                    type="email"
+                    name="email"
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="pl-9 bg-[#111] border-white/[0.08]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs text-zinc-400">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <Input
+                    type="password"
+                    name="password"
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min. 8 characters"
+                    className="pl-9 bg-[#111] border-white/[0.08]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmpassword" className="text-xs text-zinc-400">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <Input
+                    type="password"
+                    name="confirmpassword"
+                    id="confirmpassword"
+                    value={confirmpassword}
+                    onChange={(e) => setconfirmpassword(e.target.value)}
+                    placeholder="Confirm your password"
+                    className="pl-9 bg-[#111] border-white/[0.08]"
+                  />
+                </div>
+              </div>
+
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex items-center gap-2 px-3 py-2 rounded border border-red-500/20 bg-red-500/10"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span className="text-[13px] text-red-500">{error}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full mt-2"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                    Creating account...
+                  </>
+                ) : (
+                  "Create Account"
+                )}
+              </Button>
+            </form>
+
+            <div className="mt-5 text-center text-[13px] text-zinc-500">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="text-white hover:underline transition-colors"
+              >
+                Sign In
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  );
 }

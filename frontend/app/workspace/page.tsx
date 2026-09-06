@@ -1,9 +1,24 @@
-'use client'
+"use client";
 
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Zap,
+  Plus,
+  FolderOpen,
+  Calendar,
+  Link2,
+  ChevronRight,
+  X,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 
 interface Workspace {
   id: string;
@@ -13,6 +28,19 @@ interface Workspace {
   endpoints?: { id: string }[];
 }
 
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: (i: number = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.3,
+      delay: i * 0.05,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  }),
+};
+
 export default function WorkspacePage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,11 +49,10 @@ export default function WorkspacePage() {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [creating, setCreating] = useState(false);
 
-
   const fetchWorkspaces = async () => {
     try {
       setLoading(true);
-      const data = await apiFetch(`/webhook/api/workspaces`, { method: 'GET' });
+      const data = await apiFetch(`/webhook/api/workspaces`, { method: "GET" });
       setWorkspaces(data);
       setError(null);
     } catch (err) {
@@ -44,8 +71,8 @@ export default function WorkspacePage() {
     if (!newWorkspaceName.trim()) return;
     try {
       setCreating(true);
-      await apiFetch('/webhook/api/workspace', {
-        method: 'POST',
+      await apiFetch("/webhook/api/workspace", {
+        method: "POST",
         body: JSON.stringify({ name: newWorkspaceName.trim() }),
       });
       setNewWorkspaceName("");
@@ -59,277 +86,255 @@ export default function WorkspacePage() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
   return (
     <ProtectedRoute>
-    <div className="min-h-screen bg-[#09090b] text-white relative overflow-hidden">
-      {/* Background ambient glow */}
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-cyan-500/8 blur-[100px]" />
-      </div>
+      <div className="min-h-screen bg-black text-white relative overflow-hidden selection:bg-white/20">
+        <div className="pointer-events-none fixed inset-0 grid-pattern" />
 
-      {/* Header */}
-      <header className="relative z-10 border-b border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-400 flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-                </svg>
-              </div>
-              <span className="text-lg font-semibold tracking-tight">WebhookLab</span>
-            </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-lg shadow-violet-500/20 hover:shadow-violet-500/30 cursor-pointer active:scale-[0.97]"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              New Workspace
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-10">
-        {/* Page Title */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-            Your Workspaces
-          </h1>
-          <p className="mt-2 text-zinc-500 text-sm">
-            Manage your webhook endpoints and monitor incoming requests.
-          </p>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 animate-pulse"
-              >
-                <div className="h-5 w-32 bg-zinc-800 rounded mb-4" />
-                <div className="h-3 w-24 bg-zinc-800/60 rounded mb-6" />
-                <div className="flex gap-3">
-                  <div className="h-8 w-20 bg-zinc-800/40 rounded-lg" />
-                  <div className="h-8 w-20 bg-zinc-800/40 rounded-lg" />
+        <header className="relative z-10 border-b border-white/[0.08] bg-black/80 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-6 lg:px-8">
+            <div className="flex items-center justify-between h-14">
+              <Link href="/" className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded bg-white flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-black" />
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && !loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-              </svg>
-            </div>
-            <p className="text-zinc-400 mb-4">{error}</p>
-            <button
-              onClick={fetchWorkspaces}
-              className="px-4 py-2 text-sm bg-white/[0.06] hover:bg-white/[0.1] rounded-lg transition-colors cursor-pointer"
-            >
-              Try Again
-            </button>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && !error && workspaces.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-500/10 to-cyan-400/10 border border-white/[0.06] flex items-center justify-center mb-6">
-              <svg className="w-8 h-8 text-zinc-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-zinc-300 mb-2">No workspaces yet</h2>
-            <p className="text-zinc-600 text-sm mb-6 max-w-sm text-center">
-              Create your first workspace to start receiving and inspecting webhook requests.
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-lg shadow-violet-500/20 cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Create Workspace
-            </button>
-          </div>
-        )}
-
-        {/* Workspace Grid */}
-        {!loading && !error && workspaces.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {workspaces.map((ws, index) => (
-              <Link
-                key={ws.id}
-                href={`/workspace/${ws.id}`}
-                className="group relative rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1] transition-all duration-300 p-6 cursor-pointer"
-                style={{ animationDelay: `${index * 80}ms` }}
-              >
-                {/* Hover glow */}
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                <div className="relative">
-                  {/* Icon + Name */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500/20 to-cyan-400/10 border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <svg className="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-white group-hover:text-violet-200 transition-colors">
-                          {ws.name}
-                        </h3>
-                        <p className="text-xs text-zinc-600 font-mono mt-0.5 truncate max-w-[160px]">
-                          {ws.id}
-                        </p>
-                      </div>
-                    </div>
-                    <svg className="w-4 h-4 text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </div>
-
-                  {/* Meta */}
-                  <div className="flex items-center gap-4 text-xs text-zinc-600">
-                    <span className="flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                      </svg>
-                      {formatDate(ws.createdAt)}
-                    </span>
-                    {ws.endpoints && (
-                      <span className="flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-                        </svg>
-                        {ws.endpoints.length} endpoint{ws.endpoints.length !== 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <span className="text-base font-medium tracking-tight">
+                  WebhookLab
+                </span>
               </Link>
-            ))}
-
-            {/* Create New Card */}
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="group rounded-xl border border-dashed border-white/[0.08] hover:border-violet-500/30 bg-transparent hover:bg-violet-500/[0.03] transition-all duration-300 p-6 flex flex-col items-center justify-center gap-3 min-h-[140px] cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-full bg-white/[0.04] group-hover:bg-violet-500/10 flex items-center justify-center transition-colors">
-                <svg className="w-5 h-5 text-zinc-600 group-hover:text-violet-400 transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-              </div>
-              <span className="text-sm text-zinc-600 group-hover:text-zinc-400 transition-colors">New Workspace</span>
-            </button>
-          </div>
-        )}
-      </main>
-
-      {/* Create Workspace Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowCreateModal(false)}
-          />
-
-          {/* Modal */}
-          <div className="relative w-full max-w-md mx-4 rounded-2xl border border-white/[0.08] bg-zinc-950/95 backdrop-blur-xl shadow-2xl p-6 animate-[modalIn_0.2s_ease-out]">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Create Workspace</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer"
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShowCreateModal(true)}
               >
-                <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="workspace-name" className="block text-sm font-medium text-zinc-400 mb-2">
-                  Workspace Name
-                </label>
-                <input
-                  id="workspace-name"
-                  type="text"
-                  value={newWorkspaceName}
-                  onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateWorkspace()}
-                  placeholder="e.g. Production Hooks"
-                  className="w-full px-4 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-zinc-600 text-sm focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-all"
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateWorkspace}
-                  disabled={creating || !newWorkspaceName.trim()}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-violet-500/20 cursor-pointer"
-                >
-                  {creating ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Creating...
-                    </span>
-                  ) : (
-                    'Create'
-                  )}
-                </button>
-              </div>
+                <Plus className="w-4 h-4 mr-1.5" />
+                New Workspace
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        </header>
 
-      {/* Modal animation keyframes */}
-      <style>{`
-        @keyframes modalIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95) translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-      `}</style>
-    </div>
+        <main className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-10">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mb-8"
+          >
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Your Workspaces
+            </h1>
+            <p className="mt-1 text-zinc-400 text-sm">
+              Manage your webhook endpoints and monitor incoming requests.
+            </p>
+          </motion.div>
+
+          {loading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-5 animate-pulse"
+                >
+                  <div className="h-4 w-32 bg-white/[0.05] rounded mb-4" />
+                  <div className="h-3 w-24 bg-white/[0.03] rounded mb-5" />
+                  <div className="flex gap-2">
+                    <div className="h-6 w-16 bg-white/[0.02] rounded" />
+                    <div className="h-6 w-16 bg-white/[0.02] rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {error && !loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-20"
+            >
+              <div className="w-12 h-12 rounded border border-red-500/20 bg-red-500/10 flex items-center justify-center mb-4">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <p className="text-zinc-400 text-sm mb-4">{error}</p>
+              <Button variant="secondary" size="sm" onClick={fetchWorkspaces}>
+                Try Again
+              </Button>
+            </motion.div>
+          )}
+
+          {!loading && !error && workspaces.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="flex flex-col items-center justify-center py-24"
+            >
+              <div className="w-16 h-16 rounded-lg bg-[#0A0A0A] border border-white/[0.08] flex items-center justify-center mb-5">
+                <FolderOpen className="w-6 h-6 text-zinc-500" />
+              </div>
+              <h2 className="text-lg font-medium text-white mb-1.5">
+                No workspaces yet
+              </h2>
+              <p className="text-zinc-400 text-sm mb-6 max-w-[280px] text-center">
+                Create your first workspace to start receiving webhook requests.
+              </p>
+              <Button
+                variant="primary"
+                onClick={() => setShowCreateModal(true)}
+              >
+                <Plus className="w-4 h-4 mr-1.5" />
+                Create Workspace
+              </Button>
+            </motion.div>
+          )}
+
+          {!loading && !error && workspaces.length > 0 && (
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            >
+              {workspaces.map((ws, index) => (
+                <motion.div key={ws.id} variants={fadeUp} custom={index}>
+                  <Link
+                    href={`/workspace/${ws.id}`}
+                    className="group block rounded-lg border border-white/[0.08] bg-[#0A0A0A] hover:bg-[#111] hover:border-white/[0.15] transition-all p-5"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-white/[0.05] border border-white/[0.05] flex items-center justify-center shrink-0">
+                          <FolderOpen className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-white">
+                            {ws.name}
+                          </h3>
+                          <p className="text-[11px] text-zinc-500 font-mono mt-0.5 truncate max-w-[160px]">
+                            {ws.id}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+                    </div>
+
+                    <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {formatDate(ws.createdAt)}
+                      </span>
+                      {ws.endpoints && (
+                        <span className="flex items-center gap-1.5">
+                          <Link2 className="w-3.5 h-3.5" />
+                          {ws.endpoints.length} endpoint
+                          {ws.endpoints.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+
+              <motion.div variants={fadeUp} custom={workspaces.length}>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="group w-full rounded-lg border border-dashed border-white/[0.08] bg-transparent hover:bg-white/[0.02] hover:border-white/[0.15] transition-all p-5 flex flex-col items-center justify-center gap-2.5 min-h-[116px] cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded bg-white/[0.03] flex items-center justify-center transition-colors">
+                    <Plus className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="text-[13px] text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                    New Workspace
+                  </span>
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </main>
+
+        <AnimatePresence>
+          {showCreateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={() => setShowCreateModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: 10 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="relative w-full max-w-[400px] mx-4 rounded-xl border border-white/[0.1] bg-[#0A0A0A] shadow-2xl p-6"
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-base font-medium">Create Workspace</h2>
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    className="w-7 h-7 rounded hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer text-zinc-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="workspace-name" className="text-xs text-zinc-400">Workspace Name</Label>
+                    <Input
+                      id="workspace-name"
+                      type="text"
+                      value={newWorkspaceName}
+                      onChange={(e) => setNewWorkspaceName(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleCreateWorkspace()
+                      }
+                      placeholder="e.g. Production Hooks"
+                      className="bg-[#111] border-white/[0.08]"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => setShowCreateModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="flex-1"
+                      onClick={handleCreateWorkspace}
+                      disabled={creating || !newWorkspaceName.trim()}
+                    >
+                      {creating ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
     </ProtectedRoute>
   );
 }

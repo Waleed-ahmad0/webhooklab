@@ -1,4 +1,3 @@
-// auth.config.ts
 import bcrypt from "bcrypt"
 import { prisma } from '../lib/prisma.js'
 import Credentials from "@auth/express/providers/credentials"

@@ -1,10 +1,25 @@
-'use client'
+"use client";
 
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Zap,
+  Plus,
+  Link2,
+  ChevronRight,
+  X,
+  Loader2,
+  AlertCircle,
+  Copy,
+  Check,
+} from "lucide-react";
 
 interface Endpoint {
   id: string;
@@ -13,6 +28,19 @@ interface Endpoint {
   workspaceId: string;
   createdAt: string;
 }
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.3,
+      delay: i * 0.05,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  }),
+};
 
 export default function WorkspaceDetailPage() {
   const params = useParams();
@@ -29,7 +57,7 @@ export default function WorkspaceDetailPage() {
   const fetchEndpoints = async () => {
     try {
       setLoading(true);
-      const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, { method: 'GET' });
+      const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, { method: "GET" });
       setEndpoints(data);
       setError(null);
     } catch (err) {
@@ -48,8 +76,8 @@ export default function WorkspaceDetailPage() {
     if (!newEndpointName.trim()) return;
     try {
       setCreating(true);
-      await apiFetch('/webhook/api/endpoint', {
-        method: 'POST',
+      await apiFetch("/webhook/api/endpoint", {
+        method: "POST",
         body: JSON.stringify({ name: newEndpointName.trim(), workspaceId }),
       });
       setNewEndpointName("");
@@ -73,10 +101,10 @@ export default function WorkspaceDetailPage() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
@@ -86,273 +114,259 @@ export default function WorkspaceDetailPage() {
 
   return (
     <ProtectedRoute>
-    <div className="min-h-screen bg-[#09090b] text-white relative overflow-hidden">
-      {/* Background ambient glow */}
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-cyan-500/8 blur-[100px]" />
-      </div>
+      <div className="min-h-screen bg-black text-white relative overflow-hidden selection:bg-white/20">
+        <div className="pointer-events-none fixed inset-0 grid-pattern" />
 
-      {/* Header */}
-      <header className="relative z-10 border-b border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/workspace" className="flex items-center gap-3 group">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-400 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-                  </svg>
+        <header className="relative z-10 border-b border-white/[0.08] bg-black/80 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-6 lg:px-8">
+            <div className="flex items-center justify-between h-14">
+              <Link href="/workspace" className="flex items-center gap-2 group">
+                <div className="w-7 h-7 rounded bg-white flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-black" />
                 </div>
-                <span className="text-lg font-semibold tracking-tight group-hover:text-violet-200 transition-colors">WebhookLab</span>
+                <span className="text-base font-medium tracking-tight group-hover:text-zinc-300 transition-colors">
+                  WebhookLab
+                </span>
               </Link>
-            </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-lg shadow-violet-500/20 hover:shadow-violet-500/30 cursor-pointer active:scale-[0.97]"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              New Endpoint
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-10">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-zinc-600 mb-6">
-          <Link href="/workspace" className="hover:text-zinc-400 transition-colors">Workspaces</Link>
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-          </svg>
-          <span className="text-zinc-400 font-mono text-xs">{workspaceId}</span>
-        </div>
-
-        {/* Page Title */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-            Endpoints
-          </h1>
-          <p className="mt-2 text-zinc-500 text-sm">
-            Create webhook endpoints and monitor incoming requests in real-time.
-          </p>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 animate-pulse"
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShowCreateModal(true)}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-zinc-800 rounded-lg" />
-                  <div className="flex-1">
-                    <div className="h-4 w-40 bg-zinc-800 rounded mb-2" />
-                    <div className="h-3 w-64 bg-zinc-800/60 rounded" />
+                <Plus className="w-4 h-4 mr-1.5" />
+                New Endpoint
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        <main className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-10">
+          <div className="flex items-center gap-2 text-[13px] text-zinc-500 mb-6">
+            <Link href="/workspace" className="hover:text-white transition-colors">
+              Workspaces
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="text-zinc-300 font-mono text-[11px] px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
+              {workspaceId}
+            </span>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mb-8"
+          >
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Endpoints
+            </h1>
+            <p className="mt-1 text-zinc-400 text-sm">
+              Create webhook endpoints and monitor incoming requests.
+            </p>
+          </motion.div>
+
+          {loading && (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 animate-pulse"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-8 h-8 bg-white/[0.05] rounded" />
+                    <div className="flex-1">
+                      <div className="h-3 w-32 bg-white/[0.05] rounded mb-2" />
+                      <div className="h-2 w-48 bg-white/[0.03] rounded" />
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+
+          {error && !loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-20"
+            >
+              <div className="w-12 h-12 rounded border border-red-500/20 bg-red-500/10 flex items-center justify-center mb-4">
+                <AlertCircle className="w-5 h-5 text-red-500" />
               </div>
-            ))}
-          </div>
-        )}
+              <p className="text-zinc-400 text-sm mb-4">{error}</p>
+              <Button variant="secondary" size="sm" onClick={fetchEndpoints}>
+                Try Again
+              </Button>
+            </motion.div>
+          )}
 
-        {/* Error State */}
-        {error && !loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-              </svg>
-            </div>
-            <p className="text-zinc-400 mb-4">{error}</p>
-            <button
-              onClick={fetchEndpoints}
-              className="px-4 py-2 text-sm bg-white/[0.06] hover:bg-white/[0.1] rounded-lg transition-colors cursor-pointer"
+          {!loading && !error && endpoints.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="flex flex-col items-center justify-center py-24"
             >
-              Try Again
-            </button>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && !error && endpoints.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-cyan-400/10 border border-white/[0.06] flex items-center justify-center mb-6">
-              <svg className="w-8 h-8 text-zinc-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-zinc-300 mb-2">No endpoints yet</h2>
-            <p className="text-zinc-600 text-sm mb-6 max-w-sm text-center">
-              Create your first endpoint to get a unique URL for receiving webhook requests.
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 transition-all duration-200 shadow-lg shadow-violet-500/20 cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Create Endpoint
-            </button>
-          </div>
-        )}
-
-        {/* Endpoints List */}
-        {!loading && !error && endpoints.length > 0 && (
-          <div className="space-y-3">
-            {endpoints.map((ep, index) => (
-              <div
-                key={ep.id}
-                className="group rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1] transition-all duration-300"
-                style={{ animationDelay: `${index * 60}ms` }}
+              <div className="w-16 h-16 rounded-lg bg-[#0A0A0A] border border-white/[0.08] flex items-center justify-center mb-5">
+                <Link2 className="w-6 h-6 text-zinc-500" />
+              </div>
+              <h2 className="text-lg font-medium text-white mb-1.5">
+                No endpoints yet
+              </h2>
+              <p className="text-zinc-400 text-sm mb-6 max-w-[280px] text-center">
+                Create your first endpoint to get a unique URL for receiving webhook requests.
+              </p>
+              <Button
+                variant="primary"
+                onClick={() => setShowCreateModal(true)}
               >
-                <div className="p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      {/* Endpoint Icon */}
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500/20 to-cyan-400/10 border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-                        </svg>
+                <Plus className="w-4 h-4 mr-1.5" />
+                Create Endpoint
+              </Button>
+            </motion.div>
+          )}
+
+          {!loading && !error && endpoints.length > 0 && (
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
+              className="space-y-3"
+            >
+              {endpoints.map((ep, index) => (
+                <motion.div
+                  key={ep.id}
+                  variants={fadeUp}
+                  custom={index}
+                  className="group rounded-lg border border-white/[0.08] bg-[#0A0A0A] hover:bg-[#111] hover:border-white/[0.15] transition-all"
+                >
+                  <div className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-white/[0.05] border border-white/[0.05] flex items-center justify-center shrink-0">
+                          <Link2 className="w-4 h-4 text-zinc-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-white">
+                            {ep.name}
+                          </h3>
+                          <p className="text-[11px] text-zinc-500 mt-0.5">
+                            Created {formatDate(ep.createdAt)}
+                          </p>
+                        </div>
                       </div>
 
-                      <div>
-                        <h3 className="text-base font-semibold text-white">{ep.name}</h3>
-                        <p className="text-xs text-zinc-600 mt-0.5">{formatDate(ep.createdAt)}</p>
-                      </div>
+                      <Link href={`/workspace/${workspaceId}/endpoint/${ep.id}`}>
+                        <Button variant="outline" size="sm">
+                          View Requests
+                        </Button>
+                      </Link>
                     </div>
 
-                    <Link
-                      href={`/workspace/${workspaceId}/endpoint/${ep.id}`}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-all cursor-pointer border border-white/[0.06] hover:border-white/[0.1]"
-                    >
-                      View Requests
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                      </svg>
-                    </Link>
+                    <div className="mt-4 flex items-center gap-2 bg-[#111] rounded border border-white/[0.05] px-2.5 py-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                        URL
+                      </span>
+                      <code className="text-[11px] text-zinc-300 font-mono flex-1 truncate ml-2 border-l border-white/[0.05] pl-3">
+                        {getWebhookUrl(ep.token)}
+                      </code>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          copyToClipboard(getWebhookUrl(ep.token), ep.id);
+                        }}
+                        className="shrink-0 w-6 h-6 rounded flex items-center justify-center hover:bg-white/[0.08] transition-colors text-zinc-400 hover:text-white"
+                        title="Copy URL"
+                      >
+                        {copiedId === ep.id ? (
+                          <Check className="w-3.5 h-3.5 text-white" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </main>
+
+        <AnimatePresence>
+          {showCreateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={() => setShowCreateModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: 10 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="relative w-full max-w-[400px] mx-4 rounded-xl border border-white/[0.1] bg-[#0A0A0A] shadow-2xl p-6"
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-base font-medium">Create Endpoint</h2>
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    className="w-7 h-7 rounded hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer text-zinc-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="endpoint-name" className="text-xs text-zinc-400">Endpoint Name</Label>
+                    <Input
+                      id="endpoint-name"
+                      type="text"
+                      value={newEndpointName}
+                      onChange={(e) => setNewEndpointName(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleCreateEndpoint()
+                      }
+                      placeholder="e.g. Stripe Payments"
+                      className="bg-[#111] border-white/[0.08]"
+                      autoFocus
+                    />
                   </div>
 
-                  {/* Webhook URL */}
-                  <div className="mt-4 flex items-center gap-2 bg-black/30 rounded-lg border border-white/[0.04] px-3 py-2">
-                    <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      URL
-                    </span>
-                    <code className="text-xs text-zinc-400 font-mono flex-1 truncate">
-                      {getWebhookUrl(ep.token)}
-                    </code>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        copyToClipboard(getWebhookUrl(ep.token), ep.id);
-                      }}
-                      className="shrink-0 p-1.5 rounded-md hover:bg-white/[0.06] transition-colors cursor-pointer"
-                      title="Copy URL"
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => setShowCreateModal(false)}
                     >
-                      {copiedId === ep.id ? (
-                        <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                        </svg>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="flex-1"
+                      onClick={handleCreateEndpoint}
+                      disabled={creating || !newEndpointName.trim()}
+                    >
+                      {creating ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                          Creating...
+                        </>
                       ) : (
-                        <svg className="w-4 h-4 text-zinc-600 hover:text-zinc-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0 0 13.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 0 1-.75.75H9.75a.75.75 0 0 1-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 0 1 1.927-.184" />
-                        </svg>
+                        "Create"
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
-
-      {/* Create Endpoint Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowCreateModal(false)}
-          />
-          <div className="relative w-full max-w-md mx-4 rounded-2xl border border-white/[0.08] bg-zinc-950/95 backdrop-blur-xl shadow-2xl p-6 animate-[modalIn_0.2s_ease-out]">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Create Endpoint</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
-              </button>
+              </motion.div>
             </div>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="endpoint-name" className="block text-sm font-medium text-zinc-400 mb-2">
-                  Endpoint Name
-                </label>
-                <input
-                  id="endpoint-name"
-                  type="text"
-                  value={newEndpointName}
-                  onChange={(e) => setNewEndpointName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateEndpoint()}
-                  placeholder="e.g. Stripe Payments"
-                  className="w-full px-4 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-zinc-600 text-sm focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-all"
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateEndpoint}
-                  disabled={creating || !newEndpointName.trim()}
-                  className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-violet-500/20 cursor-pointer"
-                >
-                  {creating ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Creating...
-                    </span>
-                  ) : (
-                    'Create'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style jsx>{`
-        @keyframes modalIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95) translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-      `}</style>
-    </div>
+          )}
+        </AnimatePresence>
+      </div>
     </ProtectedRoute>
   );
 }
