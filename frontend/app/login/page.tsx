@@ -1,32 +1,38 @@
 "use client";
-
-import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSession } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Zap, Mail, Lock, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 
-export default function Page() {
+function LoginForm() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [csrfToken, setCsrfToken] = useState("");
   const [loadingProvider] = useState<string | null>(null);
-  const [show, setshow] = useState(false)
-
+  const [show, setshow] = useState(false);
+  const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
     fetch(`/auth/csrf`, { credentials: "include" })
       .then((res) => res.json())
       .then((data) => setCsrfToken(data.csrfToken));
+
     getSession().then((session) => {
       if (session) {
         router.replace("/workspace");
@@ -34,7 +40,14 @@ export default function Page() {
         setIsLoading(false);
       }
     });
-  }, []);
+  }, [router]);
+
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    if (errorParam === "CredentialsSignin") {
+      setError("Invalid email or password");
+    }
+  }, [searchParams]);
 
   async function handleSocialSignin(provider: string) {
     const res = await fetch(`/auth/csrf`, { credentials: "include" });
@@ -54,7 +67,7 @@ export default function Page() {
     form.submit();
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     const trimmedEmail = email.trim();
@@ -71,7 +84,50 @@ export default function Page() {
     }
 
     setError(null);
-    e.currentTarget.submit();
+
+    try {
+      const res = await fetch(`/auth/callback/credentials`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        redirect: "manual",
+        body: new URLSearchParams({
+          email: trimmedEmail,
+          password: trimmedPassword,
+          csrfToken,
+          json: "true",
+        }).toString(),
+      });
+
+      const location = res.headers.get("location") ?? "";
+      const normalizedLocation = location.toLowerCase();
+
+      if (
+        normalizedLocation.includes("error=credentialssignin") ||
+        normalizedLocation.includes("/auth/error") ||
+        normalizedLocation.includes("/login?error=credentialssignin")
+      ) {
+        setError("Invalid email or password");
+        return;
+      }
+
+      if (normalizedLocation.includes("/workspace")) {
+        router.replace("/workspace");
+        return;
+      }
+
+      const sessionAfterLogin = await getSession();
+      if (sessionAfterLogin) {
+        router.replace("/workspace");
+        return;
+      }
+
+      setError("Invalid email or password");
+    } catch {
+      setError("Invalid email or password");
+    }
   }
 
   if (isLoading) {
@@ -91,7 +147,6 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden selection:bg-white/20">
-      {/* Background */}
       <div className="pointer-events-none fixed inset-0 grid-pattern" />
 
       <motion.div
@@ -100,7 +155,6 @@ export default function Page() {
         transition={{ duration: 0.4, ease: "easeOut" }}
         className="w-full max-w-[380px] relative z-10"
       >
-        {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded bg-white flex items-center justify-center">
@@ -119,6 +173,7 @@ export default function Page() {
               Sign in to your account
             </CardDescription>
           </CardHeader>
+
           <CardContent className="px-8 pb-8 pt-6">
             <form
               action={`/auth/callback/credentials`}
@@ -129,7 +184,9 @@ export default function Page() {
               <input type="hidden" name="csrfToken" value={csrfToken} />
 
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs text-zinc-400">Email Address</Label>
+                <Label htmlFor="email" className="text-xs text-zinc-400">
+                  Email Address
+                </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                   <Input
@@ -150,7 +207,9 @@ export default function Page() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs text-zinc-400">Password</Label>
+                  <Label htmlFor="password" className="text-xs text-zinc-400">
+                    Password
+                  </Label>
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
@@ -279,5 +338,19 @@ export default function Page() {
         </Card>
       </motion.div>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <Loader2 className="w-5 h-5 text-white animate-spin" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

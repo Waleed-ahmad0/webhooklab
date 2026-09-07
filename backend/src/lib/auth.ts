@@ -14,6 +14,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL!
 export const authConfig = {
 
   trustHost: true,
+
   providers: [
     Google({
       redirectProxyUrl: `${FRONTEND_URL}/auth`,
@@ -127,8 +128,12 @@ export const authConfig = {
 
 
   callbacks: {
-    async redirect({ url, baseUrl }) {
-      return `${process.env.AUTH_URL}/workspace`
+   async redirect({ url, baseUrl }) {
+      if (url.includes("error=")) {
+        const parsed = new URL(url, baseUrl);
+        return `${process.env.FRONTEND_URL}/login?${parsed.searchParams.toString()}`;
+      }
+      return `${process.env.FRONTEND_URL}/workspace`;
     },
     async signIn({
       user,
