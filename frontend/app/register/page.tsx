@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Zap, User, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+import { Zap, User, Mail, Lock, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function Page() {
   const [email, setEmail] = useState<string>("");
@@ -17,6 +17,8 @@ export default function Page() {
   const [firstName, setfirstName] = useState<string>("");
   const [lastName, setlastName] = useState<string>("");
   const [confirmpassword, setconfirmpassword] = useState<string>("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, seterror] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
@@ -45,11 +47,10 @@ export default function Page() {
         method: "POST",
         body: JSON.stringify({ email, password, firstName, lastName }),
       });
-
-      if (!res.ok) {
-        seterror(res.error);
-        throw new Error(res.error);
-      } else {
+console.log(
+  res
+)
+      if (res.message === 'success')  {
         router.push("/login");
       }
     } catch (error) {
@@ -145,14 +146,22 @@ export default function Page() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                   <Input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     name="password"
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min. 8 characters"
-                    className="pl-9 bg-[#111] border-white/[0.08]"
+                    className="pl-9 pr-11 bg-[#111] border-white/[0.08]"
                   />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -161,14 +170,22 @@ export default function Page() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                   <Input
-                    type="password"
+                    type={showConfirmPassword ? "text" : "password"}
                     name="confirmpassword"
                     id="confirmpassword"
                     value={confirmpassword}
                     onChange={(e) => setconfirmpassword(e.target.value)}
                     placeholder="Confirm your password"
-                    className="pl-9 bg-[#111] border-white/[0.08]"
+                    className="pl-9 pr-11 bg-[#111] border-white/[0.08]"
                   />
+                  <button
+                    type="button"
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 

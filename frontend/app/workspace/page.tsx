@@ -18,6 +18,7 @@ import {
   X,
   Loader2,
   AlertCircle,
+  User,
 } from "lucide-react";
 
 interface Workspace {
@@ -109,14 +110,23 @@ export default function WorkspacePage() {
                   WebhookLab
                 </span>
               </Link>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <Plus className="w-4 h-4 mr-1.5" />
-                New Workspace
-              </Button>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/profile"
+                  aria-label="Go to profile"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#111] text-zinc-300 transition-colors hover:border-white/[0.15] hover:text-white"
+                >
+                  <User className="h-4 w-4" />
+                </Link>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  New Workspace
+                </Button>
+              </div>
             </div>
           </div>
         </header>

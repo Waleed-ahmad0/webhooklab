@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Zap, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+import { Zap, Mail, Lock, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function Page() {
   const [email, setEmail] = useState<string>("");
@@ -19,6 +19,8 @@ export default function Page() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [csrfToken, setCsrfToken] = useState("");
   const [loadingProvider] = useState<string | null>(null);
+  const [show, setshow] = useState(false)
+
   const router = useRouter();
 
   useEffect(() => {
@@ -50,6 +52,26 @@ export default function Page() {
 
     document.body.appendChild(form);
     form.submit();
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail) {
+      setError("Email is required.");
+      return;
+    }
+
+    if (!trimmedPassword) {
+      setError("Password is required.");
+      return;
+    }
+
+    setError(null);
+    e.currentTarget.submit();
   }
 
   if (isLoading) {
@@ -101,6 +123,7 @@ export default function Page() {
             <form
               action={`/auth/callback/credentials`}
               method="POST"
+              onSubmit={handleSubmit}
               className="space-y-4"
             >
               <input type="hidden" name="csrfToken" value={csrfToken} />
@@ -114,9 +137,13 @@ export default function Page() {
                     name="email"
                     id="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (error) setError(null);
+                    }}
                     placeholder="you@example.com"
                     className="pl-9 bg-[#111] border-white/[0.08]"
+                    required
                   />
                 </div>
               </div>
@@ -128,14 +155,26 @@ export default function Page() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
                   <Input
-                    type="password"
+                    type={show ? "text" : "password"}
                     name="password"
                     id="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (error) setError(null);
+                    }}
                     placeholder="••••••••"
-                    className="pl-9 bg-[#111] border-white/[0.08]"
+                    className="pl-9 pr-11"
+                    required
                   />
+                  <button
+                    type="button"
+                    aria-label={show ? "Hide password" : "Show password"}
+                    onClick={() => setshow((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -157,7 +196,7 @@ export default function Page() {
                 type="submit"
                 variant="primary"
                 className="w-full mt-2"
-                disabled={isLoading}
+                disabled={isLoading || !email.trim() || !password.trim()}
               >
                 {isLoading ? (
                   <>
