@@ -18,9 +18,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
       },
 
     });
-    console.log("METHOD:", req.method);
-    console.log("CONTENT TYPE:", req.headers["content-type"]);
-    console.log("BODY:", req.body);
+   
     broadcastToEndpoint(endpoint.id, newRequest);
 
     res.status(200).json({ received: true });
