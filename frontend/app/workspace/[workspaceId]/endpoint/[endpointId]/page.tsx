@@ -54,7 +54,7 @@ export default function EndpointDetailPage() {
 
   useEffect(() => {
     const eventSource = new EventSource(
-      `${process.env.NEXT_PUBLIC_API_URL}/webhook/api/endpoint/${endpointId}/stream`,
+      `/webhook/api/endpoint/${endpointId}/stream`,
       { withCredentials: true }
     );
 
