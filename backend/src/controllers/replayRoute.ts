@@ -18,7 +18,7 @@ export const replayRequest = async (req: Request, res: Response) => {
         }
         const endpoint_check = await checkEndpointOwnership(storedRequest.endpointId, userId)
         if ('error' in endpoint_check) {
-            return res.status(endpoint_check.status as number).json({error:endpoint_check.error})
+            return res.status(endpoint_check.status as number).json({ error: endpoint_check.error })
         }
         let finalUrl = targetUrl;
         if (finalUrl.startsWith('/')) {
@@ -35,12 +35,12 @@ export const replayRequest = async (req: Request, res: Response) => {
             headers: headersToReplay,
             body: storedRequest.body ? JSON.stringify(storedRequest.body) : undefined,
         });
-        res.status(200).json({
+        return res.status(200).json({
             replayed: true,
             targetStatus: replayResponse.status,
         });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Replay failed " });
+        return res.status(500).json({ error: "Replay failed " });
     }
 };

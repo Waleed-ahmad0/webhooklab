@@ -12,6 +12,7 @@ import cookieParser from "cookie-parser";
 import { requireAuth } from "./middleware/requireAuth";
 import { authConfig } from "./lib/auth";
 import { deleteuser, getuserdata } from "./controllers/userController";
+import { listGithubRepos } from "./controllers/githubconnect";
 
 dotenv.config();
 
@@ -30,17 +31,18 @@ app.get('/webhook/api/workspaces', requireAuth, getworkspace) // get all the wor
 app.get('/webhook/api/workspaces/endpoints/:workspaceId', requireAuth, getAllWorkspaceEndpoints) // get all the  endpoints of a specific workspace // 
 app.get('/webhook/api/request/:requestId', requireAuth, getawebhookrequest) // all the details of a single webhook request
 app.get("/webhook/api/endpoint/:endpointId/stream", requireAuth, streamEndpointRequests);
-app.get('/api/user', requireAuth,getuserdata)
+app.get('/api/user', requireAuth, getuserdata)
+app.get('/api/github_data', requireAuth, listGithubRepos)
+
 
 app.post('/webhook/api/workspace', requireAuth, workspaceFunc) //creating workspace of a user //
 app.post("/webhook/api/endpoint", requireAuth, webhookendpoint) // creating endpoint in a workspace //
 app.post("/webhook/api/request/:requestId/replay", requireAuth, replayRequest); // for replaying an webhook request
 
-app.all('/webhook/api/h/:token', receiveWebhook) //creating webhook request of an endpoint
+app.all('/webhook/api/h/:token', receiveWebhook) // creating webhook request of an endpoint
 
 app.post("/api/register", createUser); // creating user
-// app.post('/api/login', login) // for login
-app.delete('/api/user',requireAuth,deleteuser)
+app.delete('/api/user', requireAuth, deleteuser)
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

@@ -2,7 +2,7 @@
 
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -45,7 +45,8 @@ const fadeUp: Variants = {
 export default function WorkspaceDetailPage() {
   const params = useParams();
   const workspaceId = params.workspaceId as string;
-
+  const pathname = usePathname()
+  
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,14 +129,25 @@ export default function WorkspaceDetailPage() {
                   WebhookLab
                 </span>
               </Link>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <Plus className="w-4 h-4 mr-1.5" />
-                New Endpoint
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                >
+                  <Link href={`${pathname}/integrations/github`} rel="noopener noreferrer">
+                    <Link2 className="w-4 h-4 mr-1.5" />
+                    Connect Github
+                  </Link>
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  New Endpoint
+                </Button>
+              </div>
             </div>
           </div>
         </header>

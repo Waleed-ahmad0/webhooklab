@@ -6,11 +6,18 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
+      }, {
+        protocol: "https",
+        hostname: 'cdn.discordapp.com',
+
+      }, {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
       },
     ],
   },
   async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+    const backendUrl = process.env.BACKEND_URL 
     return [
       {
         source: "/auth/:path*",

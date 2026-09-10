@@ -43,6 +43,8 @@ export const authConfig = {
           prompt: "consent",
           access_type: "offline",
           response_type: "code",
+          scope: "read:user user:email repo"
+
         },
       },
     }),
@@ -128,7 +130,7 @@ export const authConfig = {
 
 
   callbacks: {
-   async redirect({ url, baseUrl }) {
+    async redirect({ url, baseUrl }) {
       if (url.includes("error=")) {
         const parsed = new URL(url, baseUrl);
         return `${process.env.FRONTEND_URL}/login?${parsed.searchParams.toString()}`;
@@ -236,6 +238,9 @@ export const authConfig = {
         }
       }
 
+      if (account?.provider === "github" && account.access_token) {
+        token.githubAccessToken = account.access_token;
+      }
 
       if (trigger === "update" && session?.user) {
         const { id, firstName, lastName, profileImage, authMethods, ...rest } = session.user

@@ -1,26 +1,66 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { checkEndpointOwnership, checkWorkspaceOwnership } from "../lib/authorizations";
+import { getToken } from "@auth/core/jwt";
 
 export const webhookendpoint = async (req: Request, res: Response) => {
   try {
-
+    const token = await getToken({
+      req: { headers: new Headers(req.headers as Record<string, string>) },
+      secret: process.env.AUTH_SECRET!
+    });
     const userId = req.userId
-    const { name, workspaceId } = req.body
+    const { name, workspaceId, owner, } = req.body
+
 
     const findworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
     if (findworkspace?.ownerId !== userId) {
       return res.status(401).json({ error: 'unauthorized' })
     }
-    const createEndpoint = await prisma.endpoint.create({
-      data: {
-        name, workspaceId
+    
+    if (owner) {
+      const tempEndpoint = await prisma.endpoint.create({
+        data: {
+          name, workspaceId
+        }
+      })
+      console.log(tempEndpoint.token)
+      const ghRes = await fetch(`https://api.github.com/repos/${owner}/${name}/hooks`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token?.githubAccessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          config: {
+            url: `${process.env.BACKEND_URL}/webhook/api/h/${tempEndpoint.token}`,
+            content_type: "json",
+          },
+          events: ['*'],
+        }),
+
+      });
+      const data = await ghRes.json();
+      console.log(data, 'dataaaa')
+      
+      if (!ghRes.ok) {
+        await prisma.endpoint.delete({
+          where: { id: tempEndpoint.id }
+        })
       }
-    })
-    res.status(201).json(createEndpoint)
+      
+      return res.status(ghRes.status).json(data);
+    } else {
+      const createEndpoint = await prisma.endpoint.create({
+        data: {
+          name, workspaceId
+        }
+      })
+      return res.status(201).json(createEndpoint)
+    }
   } catch (error) {
     console.error(error)
-    res.status(500).json({ error: 'server error 500 endpoint request hit' })
+    return res.status(500).json({ error: 'server error 500 endpoint request hit' })
   }
 }
 export const getEndpointRequests = async (req: Request, res: Response) => {
@@ -35,10 +75,10 @@ export const getEndpointRequests = async (req: Request, res: Response) => {
       orderBy: { receivedAt: "desc" },
     });
 
-    res.status(200).json(requests);
+    return res.status(200).json(requests);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Failed to fetch requests" });
+    return res.status(500).json({ error: "Failed to fetch requests" });
   }
 };
 
@@ -51,10 +91,10 @@ export async function getAllWorkspaceEndpoints(req: Request, res: Response) {
       return res.status(checkworkspace.status as number).json({ error: checkworkspace.error })
     }
     const getallendpoints = await prisma.endpoint.findMany({ where: { workspaceId: workspaceId as string } })
-    res.status(200).json(getallendpoints)
+    return res.status(200).json(getallendpoints)
   } catch (error) {
     console.error(error)
-    res.status(500).json(error)
+    return res.status(500).json(error)
   }
 
 }
