@@ -66,6 +66,7 @@ model Endpoint {
   createdAt   DateTime  @default(now())
   requests    WebhookRequest[]
   githubhookId Int?
+  githubRepo String?
 }
 
 model WebhookRequest {

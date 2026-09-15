@@ -64,6 +64,7 @@ export default function GithubIntegrationsPage() {
   const [selectedEvents, setSelectedEvents] = useState<string[]>(['push', 'pull_request', 'issues']);
   const [confirmingConnection, setConfirmingConnection] = useState(false);
   const [managementMode, setManagementMode] = useState(false);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
   const pathname = usePathname();
   const workspaceId = pathname.split('/')[2] ?? '';
 
@@ -132,11 +133,55 @@ export default function GithubIntegrationsPage() {
     setManagementMode(false);
   };
   const openManageCard = async (repo: GithubRepo) => {
-    const getdeliveries = await apiFetch(`/webhook/api/endpoint/deliveries/${getEndpointForRepo(repo)?.id}`, { method: 'GET' });
-    console.log(getdeliveries, 'getdeliveries')
+    const endpoint = getEndpointForRepo(repo)
+    if (!endpoint) {
+      console.error('No endpoint found for the selected repository');
+      return;
+    }
+    const getdeliveries = await apiFetch(`/webhook/api/endpoint/${endpoint.id}/github/deliveries`, { method: 'GET' });
+
+    const list = Array.isArray(getdeliveries)
+      ? getdeliveries
+      : Array.isArray(getdeliveries?.deliveries)
+      ? getdeliveries.deliveries
+      : [];
+
+    const mapped = list.map((d: any) => {
+      const id = d.id ?? d.deliveryId;
+      const event = d.event || d.type || d.name || 'unknown';
+
+      // GitHub API: `status_code` is the numeric HTTP code, `status` is a string like "success"
+      const rawStatusCode = d.status_code ?? d.statusCode ?? d.responseStatus ?? d.response?.statusCode;
+      const statusNum = Number(rawStatusCode);
+
+      const durationMs = d.duration ?? d.durationMs ?? d.response?.durationMs ?? null;
+      const createdAt = d.delivered_at ?? d.createdAt ?? d.created_at ?? d.timestamp ?? null;
+
+      // Determine success: prefer numeric HTTP status code, fall back to status string
+      let success: boolean;
+      if (!Number.isNaN(statusNum)) {
+        success = statusNum >= 200 && statusNum < 400;
+      } else if (typeof d.status === 'string') {
+        const s = d.status.toLowerCase();
+        success = s === 'ok' || s === 'success';
+      } else {
+        success = Boolean(d.success ?? d.succeeded ?? d.ok ?? d.response?.ok);
+      }
+
+      return {
+        id,
+        event,
+        status: !Number.isNaN(statusNum) ? statusNum : rawStatusCode ?? d.status ?? '-',
+        durationMs,
+        createdAt,
+        success,
+      };
+    });
+
+    setDeliveries(mapped);
+
     setSelectedRepo(repo);
-    const events = getEndpointForRepo(repo)?.events ?? ['push', 'pull_request', 'issues'];
-    setSelectedEvents(events);
+    const events = endpoint.events ?? ['push', 'pull_request', 'issues']; setSelectedEvents(events);
     setConfirmingConnection(false);
     setManagementMode(true);
   };
@@ -165,6 +210,7 @@ export default function GithubIntegrationsPage() {
       await apiFetch('/webhook/api/endpoint', {
         method: 'POST',
         body: JSON.stringify({
+          githubRepo: selectedRepo.full_name,
           owner,
           name,
           githubRepoId: String(selectedRepo.id),
@@ -230,6 +276,24 @@ export default function GithubIntegrationsPage() {
     if (days === 1) return 'yesterday';
     if (days < 30) return `${days}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatDuration = (ms: number | null) => {
+    if (ms == null) return '-';
+    const s = (Number(ms) / 1000);
+    if (s < 1) return `${s.toFixed(2)}s`;
+    return `${s.toFixed(2)}s`;
+  };
+
+  const formatTimeAgo = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
+    return d.toLocaleDateString();
   };
 
   return (
@@ -442,6 +506,30 @@ export default function GithubIntegrationsPage() {
                 </div>
               </div>
             </div>
+
+            {managementMode && deliveries.length > 0 && (
+              <div className="rounded-lg border border-white/[0.08] bg-[#0F0F0F] p-3 mb-5 max-h-44 overflow-y-auto text-[13px] text-zinc-300">
+                <p className="text-[13px] text-zinc-400 mb-2">Recent Deliveries</p>
+                <div className="space-y-1">
+                  {deliveries.map((d) => (
+                    <div key={d.id ?? `${d.event}-${d.createdAt}`} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={d.success ? 'text-emerald-400 w-4' : 'text-red-400 w-4'}>
+                          {d.success ? '✓' : '✗'}
+                        </span>
+                        <span className="w-40 truncate font-medium text-white">{d.event}</span>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-zinc-400">
+                        <span className="w-12 text-right">{d.status}</span>
+                        <span className="w-14 text-right">{formatDuration(d.durationMs)}</span>
+                        <span className="w-28 text-right text-zinc-500">{formatTimeAgo(d.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mb-6">
               <p className="text-[13px] text-zinc-400 mb-3">Choose the GitHub events to send to this webhook</p>

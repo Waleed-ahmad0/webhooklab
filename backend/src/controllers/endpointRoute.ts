@@ -10,7 +10,7 @@ export const webhookendpoint = async (req: Request, res: Response) => {
       secret: process.env.AUTH_SECRET!
     });
     const userId = req.userId
-    const { name, workspaceId, owner, events, githubRepoId } = req.body
+    const { name, workspaceId, owner, events, githubRepoId,githubRepo } = req.body
     // console.log('githubRepoId', githubRepoId)
 
     const findworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
@@ -35,7 +35,7 @@ export const webhookendpoint = async (req: Request, res: Response) => {
 
       const tempEndpoint = await prisma.endpoint.create({
         data: {
-          name, workspaceId, githubRepoId, events: selectedEvents
+          name, workspaceId, githubRepoId, events: selectedEvents, githubRepo
         }
       })
       // console.log(tempEndpoint.token)
