@@ -10,21 +10,35 @@ export const webhookendpoint = async (req: Request, res: Response) => {
       secret: process.env.AUTH_SECRET!
     });
     const userId = req.userId
-    const { name, workspaceId, owner, } = req.body
-
+    const { name, workspaceId, owner, events, githubRepoId } = req.body
+    // console.log('githubRepoId', githubRepoId)
 
     const findworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
     if (findworkspace?.ownerId !== userId) {
       return res.status(401).json({ error: 'unauthorized' })
     }
-    
-    if (owner) {
+
+    if (owner && githubRepoId && events) {
+      const existingEndpoint = await prisma.endpoint.findFirst({
+        where: {
+          workspaceId,
+          githubRepoId
+        }
+      });
+
+      if (existingEndpoint) {
+        return res.status(400).json({ error: "An endpoint for this GitHub repository already exists in this workspace." });
+      }
+      const selectedEvents = Array.isArray(events) && events.length > 0
+        ? events.filter((event: unknown) => typeof event === 'string' && event.trim().length > 0)
+        : ['*'];
+
       const tempEndpoint = await prisma.endpoint.create({
         data: {
-          name, workspaceId
+          name, workspaceId, githubRepoId, events: selectedEvents
         }
       })
-      console.log(tempEndpoint.token)
+      // console.log(tempEndpoint.token)
       const ghRes = await fetch(`https://api.github.com/repos/${owner}/${name}/hooks`, {
         method: "POST",
         headers: {
@@ -36,24 +50,27 @@ export const webhookendpoint = async (req: Request, res: Response) => {
             url: `${process.env.BACKEND_URL}/webhook/api/h/${tempEndpoint.token}`,
             content_type: "json",
           },
-          events: ['*'],
+          events: selectedEvents,
         }),
 
       });
       const data = await ghRes.json();
-      console.log(data, 'dataaaa')
-      
+      // console.log(data, 'dataaaa')
       if (!ghRes.ok) {
         await prisma.endpoint.delete({
           where: { id: tempEndpoint.id }
         })
       }
-      
+      await prisma.endpoint.update({
+        where: { token: tempEndpoint.token },
+        data: { githubhookId: data.id, },
+      });
       return res.status(ghRes.status).json(data);
     } else {
       const createEndpoint = await prisma.endpoint.create({
         data: {
           name, workspaceId
+
         }
       })
       return res.status(201).json(createEndpoint)
@@ -91,7 +108,8 @@ export async function getAllWorkspaceEndpoints(req: Request, res: Response) {
       return res.status(checkworkspace.status as number).json({ error: checkworkspace.error })
     }
     const getallendpoints = await prisma.endpoint.findMany({ where: { workspaceId: workspaceId as string } })
-    return res.status(200).json(getallendpoints)
+    const addedworksapcename = { workspaceName: checkworkspace.workspace.name, endpoints: getallendpoints }
+    return res.status(200).json(addedworksapcename)
   } catch (error) {
     console.error(error)
     return res.status(500).json(error)

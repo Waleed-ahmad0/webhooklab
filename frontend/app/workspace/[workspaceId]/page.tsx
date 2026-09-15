@@ -59,7 +59,7 @@ export default function WorkspaceDetailPage() {
     try {
       setLoading(true);
       const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, { method: "GET" });
-      setEndpoints(data);
+      setEndpoints(data.endpoints);
       setError(null);
     } catch (err) {
       setError("Failed to load endpoints");

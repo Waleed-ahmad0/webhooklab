@@ -13,7 +13,8 @@ import { requireAuth } from "./middleware/requireAuth";
 import { authConfig } from "./lib/auth";
 import { deleteuser, getuserdata } from "./controllers/userController";
 import { listGithubRepos } from "./controllers/githubconnect";
-
+import { deleteenpoint, updateendpoint } from "./controllers/updateendpointsRoute";
+import {getdeliveries} from "./controllers/deliveriesRoute"
 dotenv.config();
 
 const app = express();
@@ -33,12 +34,17 @@ app.get('/webhook/api/request/:requestId', requireAuth, getawebhookrequest) // a
 app.get("/webhook/api/endpoint/:endpointId/stream", requireAuth, streamEndpointRequests);
 app.get('/api/user', requireAuth, getuserdata)
 app.get('/api/github_data', requireAuth, listGithubRepos)
+app.get('/webhook/api/endpoint/:endpointId/github/deliveries', requireAuth, getdeliveries) // get all the  endpoints of a specific workspace // 
 
 
 app.post('/webhook/api/workspace', requireAuth, workspaceFunc) //creating workspace of a user //
 app.post("/webhook/api/endpoint", requireAuth, webhookendpoint) // creating endpoint in a workspace //
 app.post("/webhook/api/request/:requestId/replay", requireAuth, replayRequest); // for replaying an webhook request
 
+
+app.patch('/webhook/api/endpoint', requireAuth, updateendpoint)
+
+app.delete('/webhook/api/endpoint', requireAuth, deleteenpoint)
 app.all('/webhook/api/h/:token', receiveWebhook) // creating webhook request of an endpoint
 
 app.post("/api/register", createUser); // creating user

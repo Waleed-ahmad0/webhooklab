@@ -1,6 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Zap,
@@ -30,53 +30,201 @@ type GithubRepo = {
   updated_at?: string;
 };
 
+type WorkspaceEndpoint = {
+  id: string;
+  name: string;
+  token: string;
+  workspaceId: string;
+  createdAt: string;
+  githubRepoId?: string;
+  events?: string[];
+};
+
+
+const GITHUB_WEBHOOK_EVENTS = [
+  'push',
+  'pull_request',
+  'issues',
+  'issue_comment',
+  'pull_request_review',
+  'release',
+  'fork',
+  'watch',
+  'workflow_run',
+  'discussion',
+] as const;
+
 export default function GithubIntegrationsPage() {
   const [repos, setRepos] = useState<GithubRepo[]>([]);
+  const [workspaceEndpoints, setWorkspaceEndpoints] = useState<WorkspaceEndpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const pathname = usePathname()
+  const [workspaceName, setworkspaceName] = useState<string>('')
+  const [selectedRepo, setSelectedRepo] = useState<GithubRepo | null>(null);
+  const [selectedEvents, setSelectedEvents] = useState<string[]>(['push', 'pull_request', 'issues']);
+  const [confirmingConnection, setConfirmingConnection] = useState(false);
+  const [managementMode, setManagementMode] = useState(false);
+  const pathname = usePathname();
+  const workspaceId = pathname.split('/')[2] ?? '';
+
+  const fetchWorkspaceEndpoints = useCallback(async () => {
+    if (!workspaceId) return;
+
+    try {
+      const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, {
+        method: 'GET',
+      });
+      setWorkspaceEndpoints((data) ? data.endpoints : []);
+      setworkspaceName((data) ? data.workspaceName : '');
+    } catch (err) {
+      console.error('Failed to load workspace endpoints', err);
+    }
+  }, [workspaceId]);
+
+  const fetchGithubRepos = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const data = await apiFetch('/api/github_data', {
+        method: 'GET',
+      });
+      const repoList = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.repositories)
+          ? data.repositories
+          : [];
+
+      setRepos(repoList);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Something went wrong while fetching GitHub repositories.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchGithubRepos = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        const data = await apiFetch('/api/github_data', {
-          method: 'GET',
-        });
-        console.log(data)
-        const repoList = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.repositories)
-            ? data.repositories
-            : [];
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchGithubRepos();
+    void fetchWorkspaceEndpoints();
+  }, [fetchGithubRepos, fetchWorkspaceEndpoints]);
 
-        setRepos(repoList);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Something went wrong while fetching GitHub repositories.'
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchGithubRepos();
-  }, []);
-  const autocreatehook = async (fullname: string) => {
-    const [owner, name] = fullname.split('/')
-    const workspaceId= pathname.split('/')
-    console.log(workspaceId[2])
-    console.log(owner, name)
-    const sendreq =await  apiFetch('/webhook/api/endpoint', {
-      method: "POST",
-      body: JSON.stringify({ owner, name, workspaceId:workspaceId[2] })
+
+  const isRepoConnected = (repo: GithubRepo) => {
+    return workspaceEndpoints.some((endpoint) =>
+      endpoint.githubRepoId?.trim().toLowerCase() === String(repo.id)
+    );
+  };
+
+  const getEndpointForRepo = (repo: GithubRepo) => {
+    const getendpoint = workspaceEndpoints.find((endpoint) => endpoint.githubRepoId?.trim().toLowerCase() === String(repo.id));
+
+    return getendpoint
+
+  };
+
+  const openConnectCard = (repo: GithubRepo) => {
+    setSelectedRepo(repo);
+    setSelectedEvents(['push', 'pull_request', 'issues']);
+    setConfirmingConnection(false);
+    setManagementMode(false);
+  };
+  const openManageCard = async (repo: GithubRepo) => {
+    const getdeliveries = await apiFetch(`/webhook/api/endpoint/deliveries/${getEndpointForRepo(repo)?.id}`, { method: 'GET' });
+    console.log(getdeliveries, 'getdeliveries')
+    setSelectedRepo(repo);
+    const events = getEndpointForRepo(repo)?.events ?? ['push', 'pull_request', 'issues'];
+    setSelectedEvents(events);
+    setConfirmingConnection(false);
+    setManagementMode(true);
+  };
+
+  const toggleEvent = (eventName: string) => {
+    setSelectedEvents((current) =>
+      current.includes(eventName)
+        ? current.filter((event) => event !== eventName)
+        : [...current, eventName]
+    );
+  };
+
+  const autocreatehook = async () => {
+    if (!selectedRepo?.full_name || !workspaceId || selectedEvents.length === 0) {
+      return;
+    }
+
+    const [owner, name] = selectedRepo.full_name.split('/');
+
+    if (!owner || !name) {
+      return;
+    }
+
+    try {
+      setConfirmingConnection(true);
+      await apiFetch('/webhook/api/endpoint', {
+        method: 'POST',
+        body: JSON.stringify({
+          owner,
+          name,
+          githubRepoId: String(selectedRepo.id),
+          workspaceId,
+          events: selectedEvents,
+        }),
+      });
+
+      setSelectedRepo(null);
+      await fetchWorkspaceEndpoints();
+    } catch (error) {
+      console.error('Failed to create webhook', error);
+    } finally {
+      setConfirmingConnection(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!selectedRepo) return;
+    const endpoint = getEndpointForRepo(selectedRepo);
+    if (!endpoint) {
+      setSelectedRepo(null);
+      setManagementMode(false);
+      return;
+    }
+
+    try {
+      const check = await apiFetch(`/webhook/api/endpoint`, { method: 'DELETE', body: JSON.stringify({ endpointId: endpoint.id, repo: selectedRepo?.full_name }) });
+      console.log(check, 'check')
+    } catch (err) {
+      console.error('Failed to delete endpoint', err);
+    } finally {
+      setWorkspaceEndpoints((prev) => prev.filter((e) => e.id !== endpoint.id));
+      setSelectedRepo(null);
+      setManagementMode(false);
+      void fetchWorkspaceEndpoints();
+    }
+  };
+
+  const handlesave = async () => {
+    // console.log('save clicked', selectedRepo, selectedEvents);
+    const sendpatch = await apiFetch('/webhook/api/endpoint', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        repo: selectedRepo?.full_name,
+        githubRepoId: String(selectedRepo?.id),
+        events: selectedEvents,
+        endpointId: getEndpointForRepo(selectedRepo as GithubRepo)?.id
+      })
     })
-console.log(sendreq, 'sendreq')
-  }
+    console.log(sendpatch, 'sendpatch')
+    setSelectedRepo(null);
+    setManagementMode(false);
+    void fetchWorkspaceEndpoints();
+  };
+
   const formatUpdated = (dateStr: string) => {
     const date = new Date(dateStr);
-    const diff = Date.now() - date.getTime();
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     if (days === 0) return 'today';
     if (days === 1) return 'yesterday';
@@ -144,6 +292,8 @@ console.log(sendreq, 'sendreq')
             {repos.map((repo) => {
               const repoName = repo.full_name || repo.name || 'Unnamed repository';
               const description = repo.description || 'No description provided.';
+              const connected = isRepoConnected(repo);
+              // console.log(connected, 'connected')
 
               return (
                 <article
@@ -209,20 +359,162 @@ console.log(sendreq, 'sendreq')
                     )}
                   </div>
 
-                  <button onClick={() => {
-                    if (repo.full_name) {
-                      autocreatehook(repo.full_name)
-                    }
-                  }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded text-[13px] font-medium bg-white/[0.05] border border-white/[0.08] text-white hover:bg-white/[0.1] hover:border-white/[0.15] transition-all">
-                    <Zap className="w-3.5 h-3.5" />
-                    Connect & Create Webhook
-                  </button>
+                  {!connected && (
+                    <button
+                      onClick={() => {
+                        if (repo.full_name) {
+                          openConnectCard(repo);
+                        }
+                      }}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded text-[13px] font-medium transition-all bg-white/[0.05] border border-white/[0.08] text-white hover:bg-white/[0.1] hover:border-white/[0.15]`}
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      Connect & Create Webhook
+                    </button>
+                  )}
+
+                  {connected && (
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded text-[13px] font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
+                        <Zap className="w-3.5 h-3.5" />
+                        Connected
+                      </span>
+                      <button
+                        onClick={() => openManageCard(repo)}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded text-[13px] font-medium bg-white/[0.03] border border-white/[0.08] text-white hover:bg-white/[0.06]"
+                      >
+                        Manage
+                      </button>
+                    </div>
+                  )}
                 </article>
               );
             })}
           </div>
         )}
       </main>
+
+      {selectedRepo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => { setSelectedRepo(null); setManagementMode(false); }}
+          />
+          <div className="relative w-full max-w-xl rounded-xl border border-white/[0.08] bg-[#0A0A0A] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500 mb-2">
+                  GitHub webhook
+                </p>
+                <h2 className="text-xl font-semibold text-white">{selectedRepo.full_name || selectedRepo.name}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSelectedRepo(null); setManagementMode(false); }}
+                className="rounded border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[12px] text-zinc-300 hover:bg-white/[0.06]"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-white/[0.08] bg-[#111111] p-4 mb-5">
+              <p className="text-[13px] text-zinc-400 mb-2">Repository details</p>
+              <div className="space-y-2 text-[13px] text-zinc-300">
+                <div className="flex justify-between gap-4">
+                  <span className="text-zinc-500">Owner</span>
+                  <span className="font-medium text-white">
+                    {selectedRepo.full_name?.split('/')[0] || selectedRepo.name}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-zinc-500">Name</span>
+                  <span className="font-medium text-white">{selectedRepo.name}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-zinc-500">Visibility</span>
+                  <span className="font-medium text-white">
+                    {selectedRepo.private ? 'Private' : 'Public'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-zinc-500">Workspace</span>
+                  <span className="font-medium text-white">{workspaceName}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-[13px] text-zinc-400 mb-3">Choose the GitHub events to send to this webhook</p>
+              <div className="grid grid-cols-2 gap-2">
+                {GITHUB_WEBHOOK_EVENTS.map((eventName) => (
+                  <label
+                    key={eventName}
+                    className="flex cursor-pointer items-center gap-2 rounded border border-white/[0.08] bg-[#111111] px-3 py-2 text-[13px] text-zinc-200 transition hover:border-white/[0.16]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedEvents.includes(eventName)}
+                      onChange={() => toggleEvent(eventName)}
+                      className="h-4 w-4 accent-white"
+                    />
+                    <span>{eventName}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              {managementMode ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleDisconnect()}
+                    className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-[13px] font-medium text-red-400 hover:bg-red-500/20"
+                  >
+                    Disconnect
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedRepo(null); setManagementMode(false); }}
+                    className="rounded border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] font-medium text-zinc-300 hover:bg-white/[0.06]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    onClick={(e) => handlesave()}
+                    className="rounded bg-white px-3 py-2 text-[13px] font-medium text-black transition hover:bg-zinc-200"
+                  >
+                    Save
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRepo(null)}
+                    className="rounded border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] font-medium text-zinc-300 hover:bg-white/[0.06]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedEvents.length > 0) {
+                        void autocreatehook();
+                      }
+                    }}
+                    disabled={selectedEvents.length === 0 || confirmingConnection}
+                    className="rounded bg-white px-3 py-2 text-[13px] font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {confirmingConnection ? 'Connecting...' : 'Confirm Connect'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

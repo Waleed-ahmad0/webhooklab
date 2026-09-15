@@ -61,8 +61,11 @@ model Endpoint {
   token       String    @unique @default(cuid())
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id],onDelete: Cascade)
+  githubRepoId String?
+  events     String[]
   createdAt   DateTime  @default(now())
   requests    WebhookRequest[]
+  githubhookId Int?
 }
 
 model WebhookRequest {
