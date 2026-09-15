@@ -65,6 +65,7 @@ export default function GithubIntegrationsPage() {
   const [confirmingConnection, setConfirmingConnection] = useState(false);
   const [managementMode, setManagementMode] = useState(false);
   const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [loadingDeliveries, setLoadingDeliveries] = useState(false);
   const pathname = usePathname();
   const workspaceId = pathname.split('/')[2] ?? '';
 
@@ -132,58 +133,65 @@ export default function GithubIntegrationsPage() {
     setConfirmingConnection(false);
     setManagementMode(false);
   };
-  const openManageCard = async (repo: GithubRepo) => {
-    const endpoint = getEndpointForRepo(repo)
+  const openManageCard = (repo: GithubRepo) => {
+    const endpoint = getEndpointForRepo(repo);
     if (!endpoint) {
       console.error('No endpoint found for the selected repository');
       return;
     }
-    const getdeliveries = await apiFetch(`/webhook/api/endpoint/${endpoint.id}/github/deliveries`, { method: 'GET' });
 
-    const list = Array.isArray(getdeliveries)
-      ? getdeliveries
-      : Array.isArray(getdeliveries?.deliveries)
-      ? getdeliveries.deliveries
-      : [];
-
-    const mapped = list.map((d: any) => {
-      const id = d.id ?? d.deliveryId;
-      const event = d.event || d.type || d.name || 'unknown';
-
-      // GitHub API: `status_code` is the numeric HTTP code, `status` is a string like "success"
-      const rawStatusCode = d.status_code ?? d.statusCode ?? d.responseStatus ?? d.response?.statusCode;
-      const statusNum = Number(rawStatusCode);
-
-      const durationMs = d.duration ?? d.durationMs ?? d.response?.durationMs ?? null;
-      const createdAt = d.delivered_at ?? d.createdAt ?? d.created_at ?? d.timestamp ?? null;
-
-      // Determine success: prefer numeric HTTP status code, fall back to status string
-      let success: boolean;
-      if (!Number.isNaN(statusNum)) {
-        success = statusNum >= 200 && statusNum < 400;
-      } else if (typeof d.status === 'string') {
-        const s = d.status.toLowerCase();
-        success = s === 'ok' || s === 'success';
-      } else {
-        success = Boolean(d.success ?? d.succeeded ?? d.ok ?? d.response?.ok);
-      }
-
-      return {
-        id,
-        event,
-        status: !Number.isNaN(statusNum) ? statusNum : rawStatusCode ?? d.status ?? '-',
-        durationMs,
-        createdAt,
-        success,
-      };
-    });
-
-    setDeliveries(mapped);
-
+    // Open the card immediately
     setSelectedRepo(repo);
-    const events = endpoint.events ?? ['push', 'pull_request', 'issues']; setSelectedEvents(events);
+    const events = endpoint.events ?? ['push', 'pull_request', 'issues'];
+    setSelectedEvents(events);
     setConfirmingConnection(false);
     setManagementMode(true);
+    setDeliveries([]);
+    setLoadingDeliveries(true);
+
+    // Fetch deliveries in the background
+    apiFetch(`/webhook/api/endpoint/${endpoint.id}/github/deliveries`, { method: 'GET' })
+      .then((getdeliveries) => {
+        const list = Array.isArray(getdeliveries)
+          ? getdeliveries
+          : Array.isArray(getdeliveries?.deliveries)
+          ? getdeliveries.deliveries
+          : [];
+
+        const mapped = list.map((d: any) => {
+          const id = d.id ?? d.deliveryId;
+          const event = d.event || d.type || d.name || 'unknown';
+
+          const rawStatusCode = d.status_code ?? d.statusCode ?? d.responseStatus ?? d.response?.statusCode;
+          const statusNum = Number(rawStatusCode);
+
+          const durationMs = d.duration ?? d.durationMs ?? d.response?.durationMs ?? null;
+          const createdAt = d.delivered_at ?? d.createdAt ?? d.created_at ?? d.timestamp ?? null;
+
+          let success: boolean;
+          if (!Number.isNaN(statusNum)) {
+            success = statusNum >= 200 && statusNum < 400;
+          } else if (typeof d.status === 'string') {
+            const s = d.status.toLowerCase();
+            success = s === 'ok' || s === 'success';
+          } else {
+            success = Boolean(d.success ?? d.succeeded ?? d.ok ?? d.response?.ok);
+          }
+
+          return {
+            id,
+            event,
+            status: !Number.isNaN(statusNum) ? statusNum : rawStatusCode ?? d.status ?? '-',
+            durationMs,
+            createdAt,
+            success,
+          };
+        });
+
+        setDeliveries(mapped);
+      })
+      .catch((err) => console.error('Failed to fetch deliveries', err))
+      .finally(() => setLoadingDeliveries(false));
   };
 
   const toggleEvent = (eventName: string) => {
@@ -239,7 +247,6 @@ export default function GithubIntegrationsPage() {
 
     try {
       const check = await apiFetch(`/webhook/api/endpoint`, { method: 'DELETE', body: JSON.stringify({ endpointId: endpoint.id, repo: selectedRepo?.full_name }) });
-      console.log(check, 'check')
     } catch (err) {
       console.error('Failed to delete endpoint', err);
     } finally {
@@ -251,7 +258,6 @@ export default function GithubIntegrationsPage() {
   };
 
   const handlesave = async () => {
-    // console.log('save clicked', selectedRepo, selectedEvents);
     const sendpatch = await apiFetch('/webhook/api/endpoint', {
       method: 'PATCH',
       body: JSON.stringify({
@@ -261,7 +267,6 @@ export default function GithubIntegrationsPage() {
         endpointId: getEndpointForRepo(selectedRepo as GithubRepo)?.id
       })
     })
-    console.log(sendpatch, 'sendpatch')
     setSelectedRepo(null);
     setManagementMode(false);
     void fetchWorkspaceEndpoints();
@@ -357,7 +362,6 @@ export default function GithubIntegrationsPage() {
               const repoName = repo.full_name || repo.name || 'Unnamed repository';
               const description = repo.description || 'No description provided.';
               const connected = isRepoConnected(repo);
-              // console.log(connected, 'connected')
 
               return (
                 <article
@@ -507,27 +511,36 @@ export default function GithubIntegrationsPage() {
               </div>
             </div>
 
-            {managementMode && deliveries.length > 0 && (
+            {managementMode && (
               <div className="rounded-lg border border-white/[0.08] bg-[#0F0F0F] p-3 mb-5 max-h-44 overflow-y-auto text-[13px] text-zinc-300">
                 <p className="text-[13px] text-zinc-400 mb-2">Recent Deliveries</p>
-                <div className="space-y-1">
-                  {deliveries.map((d) => (
-                    <div key={d.id ?? `${d.event}-${d.createdAt}`} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className={d.success ? 'text-emerald-400 w-4' : 'text-red-400 w-4'}>
-                          {d.success ? '✓' : '✗'}
-                        </span>
-                        <span className="w-40 truncate font-medium text-white">{d.event}</span>
-                      </div>
+                {loadingDeliveries ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+                    <span className="ml-2 text-zinc-500 text-[12px]">Loading deliveries…</span>
+                  </div>
+                ) : deliveries.length === 0 ? (
+                  <p className="text-[12px] text-zinc-500 py-2">No deliveries found.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {deliveries.map((d) => (
+                      <div key={d.id ?? `${d.event}-${d.createdAt}`} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={d.success ? 'text-emerald-400 w-4' : 'text-red-400 w-4'}>
+                            {d.success ? '✓' : '✗'}
+                          </span>
+                          <span className="w-40 truncate font-medium text-white">{d.event}</span>
+                        </div>
 
-                      <div className="flex items-center gap-4 text-zinc-400">
-                        <span className="w-12 text-right">{d.status}</span>
-                        <span className="w-14 text-right">{formatDuration(d.durationMs)}</span>
-                        <span className="w-28 text-right text-zinc-500">{formatTimeAgo(d.createdAt)}</span>
+                        <div className="flex items-center gap-4 text-zinc-400">
+                          <span className="w-12 text-right">{d.status}</span>
+                          <span className="w-14 text-right">{formatDuration(d.durationMs)}</span>
+                          <span className="w-28 text-right text-zinc-500">{formatTimeAgo(d.createdAt)}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

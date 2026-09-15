@@ -10,7 +10,6 @@ export async function getdeliveries(req: Request, res: Response) {
         });
         const { endpointId } = req.params
         const userId = req.userId
-        console.log('endpointId', endpointId, 'userId', userId)
         const ownercheck = await checkEndpointOwnership(endpointId as string, userId)
         if ("error" in ownercheck) {
             return res.status(ownercheck.status as number).json({ error: ownercheck.error })

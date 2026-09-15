@@ -11,7 +11,6 @@ export const webhookendpoint = async (req: Request, res: Response) => {
     });
     const userId = req.userId
     const { name, workspaceId, owner, events, githubRepoId,githubRepo } = req.body
-    // console.log('githubRepoId', githubRepoId)
 
     const findworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
     if (findworkspace?.ownerId !== userId) {
@@ -38,7 +37,6 @@ export const webhookendpoint = async (req: Request, res: Response) => {
           name, workspaceId, githubRepoId, events: selectedEvents, githubRepo
         }
       })
-      // console.log(tempEndpoint.token)
       const ghRes = await fetch(`https://api.github.com/repos/${owner}/${name}/hooks`, {
         method: "POST",
         headers: {
@@ -55,7 +53,6 @@ export const webhookendpoint = async (req: Request, res: Response) => {
 
       });
       const data = await ghRes.json();
-      // console.log(data, 'dataaaa')
       if (!ghRes.ok) {
         await prisma.endpoint.delete({
           where: { id: tempEndpoint.id }
