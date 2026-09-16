@@ -83,7 +83,6 @@ export const getEndpointRequests = async (req: Request, res: Response) => {
     const limit = Math.min(Number(req.query.limit) || 25, 100);
 
     const skip = (page - 1) * limit;
-    console.log(page, limit, skip)
     const { endpointId } = req.params;
     const userId = req.userId
     const checkendpointowner = await checkEndpointOwnership(endpointId as string, userId)
@@ -113,7 +112,6 @@ export const getEndpointRequests = async (req: Request, res: Response) => {
         totalPages: Math.ceil(total / limit),
       },
     }
-    console.log(modify)
     return res.status(200).json(modify);
   } catch (error) {
     console.error(error);

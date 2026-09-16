@@ -11,7 +11,6 @@ export const updateendpoint = async (req: Request, res: Response) => {
         });
         const userId = req.userId
         const { events, endpointId, repo } = req.body
-        console.log(endpointId)
         const getendpoint = await checkEndpointOwnership(endpointId, userId)
         if ("error" in getendpoint) return res.status(getendpoint.status as number).json({ error: getendpoint.error });
         if (!('endpoint' in getendpoint)) return res.status(404).json({ error: 'Endpoint not found' });
@@ -69,7 +68,6 @@ export async function deleteenpoint(req: Request, res: Response) {
         if (('error' in checkowner)) return res.status(checkowner.status as number).json({ error: checkowner.error });
         if (!('endpoint' in checkowner)) return res.status(404).json({ error: 'Endpoint not found' });
         const endpoint = checkowner.endpoint;
-        console.log('hook id ', endpoint.githubhookId, repoName, owner)
         const ghRes = await fetch(
             `https://api.github.com/repos/${owner}/${repoName}/hooks/${endpoint.githubhookId}`,
             {

@@ -79,10 +79,10 @@ export default function EndpointDetailPage() {
 
     return () => eventSource.close();
   }, [endpointId]);
-
   const fetchRequests = async () => {
     try {
       setLoading(true);
+      console.log(currentPage)
       const data = await apiFetch(
         `/webhook/api/endpoint/request/${endpointId}?page=${currentPage}&limit=25`,
         { method: "GET" }
@@ -91,7 +91,7 @@ export default function EndpointDetailPage() {
       setWorkspaceName(data.workspaceName)
       setendpointName(data.endpointName)
       setRequests(data.requests);
-      setTotalPages(data.totalPages)
+      setTotalPages(data.pagination?.totalPages || 1)
       if (data.requests.length > 0 && !selectedRequest) {
         setSelectedRequest(data.requests[0]);
       }
@@ -106,7 +106,7 @@ export default function EndpointDetailPage() {
 
   useEffect(() => {
     if (endpointId) fetchRequests();
-  }, [endpointId]);
+  }, [endpointId, currentPage]);
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -274,7 +274,10 @@ export default function EndpointDetailPage() {
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
-                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        onClick={() => 
+                          setCurrentPage((p) => Math.max(1, p - 1))
+
+                        }
                         disabled={currentPage === 1}
                         className={currentPage === 1 ? "opacity-40 pointer-events-none" : ""}
                       />

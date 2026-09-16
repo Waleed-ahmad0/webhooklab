@@ -40,7 +40,6 @@ type WorkspaceEndpoint = {
   events?: string[];
 };
 
-
 const GITHUB_WEBHOOK_EVENTS = [
   'push',
   'pull_request',
