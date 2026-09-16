@@ -10,7 +10,7 @@ export const webhookendpoint = async (req: Request, res: Response) => {
       secret: process.env.AUTH_SECRET!
     });
     const userId = req.userId
-    const { name, workspaceId, owner, events, githubRepoId,githubRepo } = req.body
+    const { name, workspaceId, owner, events, githubRepoId, githubRepo } = req.body
 
     const findworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId } })
     if (findworkspace?.ownerId !== userId) {
@@ -79,17 +79,42 @@ export const webhookendpoint = async (req: Request, res: Response) => {
 }
 export const getEndpointRequests = async (req: Request, res: Response) => {
   try {
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 25, 100);
+
+    const skip = (page - 1) * limit;
+    console.log(page, limit, skip)
     const { endpointId } = req.params;
     const userId = req.userId
     const checkendpointowner = await checkEndpointOwnership(endpointId as string, userId)
     if ("error" in checkendpointowner) return res.status(checkendpointowner.status as number).json({ error: checkendpointowner.error });
 
-    const requests = await prisma.webhookRequest.findMany({
-      where: { endpointId: endpointId as string },
-      orderBy: { receivedAt: "desc" },
-    });
+    const [requests, total] = await Promise.all([
+      prisma.webhookRequest.findMany({
+        where: { endpointId: endpointId as string },
+        orderBy: { receivedAt: "desc" },
+        skip,
+        take: limit,
+      }),
 
-    return res.status(200).json(requests);
+      prisma.webhookRequest.count({
+        where: { endpointId: endpointId as string },
+      }),
+    ]);
+    if (!('endpoint' in checkendpointowner)) return res.status(404).json({ error: 'Endpoint not found' });
+    const modify = {
+      requests,
+      workspaceName: checkendpointowner.workspace.name,
+      endpointName: checkendpointowner.endpoint.name,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    }
+    console.log(modify)
+    return res.status(200).json(modify);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Failed to fetch requests" });

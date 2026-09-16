@@ -16,6 +16,15 @@ import {
   Clock,
   ArrowRightCircle,
 } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 
 interface WebhookRequest {
   id: string;
@@ -40,7 +49,8 @@ export default function EndpointDetailPage() {
   const params = useParams();
   const workspaceId = params.workspaceId as string;
   const endpointId = params.endpointId as string;
-
+  const [workspaceName, setWorkspaceName] = useState<string>('')
+  const [endpointName, setendpointName] = useState<string>('')
   const [requests, setRequests] = useState<WebhookRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +61,12 @@ export default function EndpointDetailPage() {
   const [targetUrl, setTargetUrl] = useState("");
   const [replaying, setReplaying] = useState(false);
   const [replayResult, setReplayResult] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
+
+
     const eventSource = new EventSource(
       `/webhook/api/endpoint/${endpointId}/stream`,
       { withCredentials: true }
@@ -70,12 +84,16 @@ export default function EndpointDetailPage() {
     try {
       setLoading(true);
       const data = await apiFetch(
-        `/webhook/api/endpoint/request/${endpointId}`,
+        `/webhook/api/endpoint/request/${endpointId}?page=${currentPage}&limit=25`,
         { method: "GET" }
       );
-      setRequests(data);
-      if (data.length > 0 && !selectedRequest) {
-        setSelectedRequest(data[0]);
+      console.log(data)
+      setWorkspaceName(data.workspaceName)
+      setendpointName(data.endpointName)
+      setRequests(data.requests);
+      setTotalPages(data.totalPages)
+      if (data.requests.length > 0 && !selectedRequest) {
+        setSelectedRequest(data.requests[0]);
       }
       setError(null);
     } catch (err) {
@@ -142,7 +160,7 @@ export default function EndpointDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-black text-white relative overflow-hidden flex flex-col selection:bg-white/20">
+      <div className="h-screen bg-black text-white relative overflow-hidden flex flex-col selection:bg-white/20">
         <div className="pointer-events-none fixed inset-0 grid-pattern" />
 
         {/* Header */}
@@ -176,11 +194,11 @@ export default function EndpointDetailPage() {
                 href={`/workspace/${workspaceId}`}
                 className="hover:text-white transition-colors font-mono"
               >
-                {workspaceId}
+                {workspaceName}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" />
               <span className="text-zinc-200 font-mono px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
-                {endpointId}
+                {endpointName}
               </span>
             </div>
           </div>
@@ -221,18 +239,16 @@ export default function EndpointDetailPage() {
                   <button
                     key={req.id}
                     onClick={() => setSelectedRequest(req)}
-                    className={`w-full text-left px-4 py-3.5 border-b border-white/[0.04] transition-colors ${
-                      selectedRequest?.id === req.id
-                        ? "bg-white/[0.06] border-l-2 border-l-white"
-                        : "hover:bg-white/[0.02] border-l-2 border-l-transparent"
-                    }`}
+                    className={`w-full text-left px-4 py-3.5 border-b border-white/[0.04] transition-colors ${selectedRequest?.id === req.id
+                      ? "bg-white/[0.06] border-l-2 border-l-white"
+                      : "hover:bg-white/[0.02] border-l-2 border-l-transparent"
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span
-                        className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider border ${
-                          methodColors[req.method.toUpperCase()] ||
+                        className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider border ${methodColors[req.method.toUpperCase()] ||
                           "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
-                        }`}
+                          }`}
                       >
                         {req.method}
                       </span>
@@ -250,6 +266,86 @@ export default function EndpointDetailPage() {
                 ))
               )}
             </div>
+
+            {/* Pagination */}
+            {!loading && (
+              <div className="px-3 py-3 border-t border-white/[0.08] bg-[#111] shrink-0">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className={currentPage === 1 ? "opacity-40 pointer-events-none" : ""}
+                      />
+                    </PaginationItem>
+
+                    {/* First page */}
+                    <PaginationItem>
+                      <PaginationLink
+                        isActive={currentPage === 1}
+                        onClick={() => setCurrentPage(1)}
+                      >
+                        1
+                      </PaginationLink>
+                    </PaginationItem>
+
+                    {/* Ellipsis after first */}
+                    {currentPage > 3 && (
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )}
+
+                    {/* Pages around current */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(
+                        (page) =>
+                          page !== 1 &&
+                          page !== totalPages &&
+                          Math.abs(page - currentPage) <= 1
+                      )
+                      .map((page) => (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            isActive={currentPage === page}
+                            onClick={() => setCurrentPage(page)}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+
+                    {/* Ellipsis before last */}
+                    {currentPage < totalPages - 2 && (
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )}
+
+                    {/* Last page */}
+                    {totalPages > 1 && (
+                      <PaginationItem>
+                        <PaginationLink
+                          isActive={currentPage === totalPages}
+                          onClick={() => setCurrentPage(totalPages)}
+                        >
+                          {totalPages}
+                        </PaginationLink>
+                      </PaginationItem>
+                    )}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className={currentPage === totalPages ? "opacity-40 pointer-events-none" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </div>
 
           {/* Right Panel: Request Detail */}
@@ -259,10 +355,9 @@ export default function EndpointDetailPage() {
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-3">
                     <span
-                      className={`inline-flex px-2.5 py-1 rounded text-[12px] font-bold uppercase tracking-wider border ${
-                        methodColors[selectedRequest.method.toUpperCase()] ||
+                      className={`inline-flex px-2.5 py-1 rounded text-[12px] font-bold uppercase tracking-wider border ${methodColors[selectedRequest.method.toUpperCase()] ||
                         "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
-                      }`}
+                        }`}
                     >
                       {selectedRequest.method}
                     </span>
@@ -312,11 +407,10 @@ export default function EndpointDetailPage() {
                   </div>
                   {replayResult && (
                     <p
-                      className={`mt-2 text-[13px] font-medium ${
-                        replayResult.includes("success")
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
+                      className={`mt-2 text-[13px] font-medium ${replayResult.includes("success")
+                        ? "text-green-400"
+                        : "text-red-400"
+                        }`}
                     >
                       {replayResult}
                     </p>
@@ -326,21 +420,19 @@ export default function EndpointDetailPage() {
                 <div className="flex items-center gap-1 mb-4 p-1 bg-white/[0.03] border border-white/[0.08] rounded w-fit">
                   <button
                     onClick={() => setActiveTab("body")}
-                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded transition-colors ${
-                      activeTab === "body"
-                        ? "bg-white/[0.1] text-white"
-                        : "text-zinc-400 hover:text-zinc-200"
-                    }`}
+                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded transition-colors ${activeTab === "body"
+                      ? "bg-white/[0.1] text-white"
+                      : "text-zinc-400 hover:text-zinc-200"
+                      }`}
                   >
                     Body
                   </button>
                   <button
                     onClick={() => setActiveTab("headers")}
-                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded transition-colors ${
-                      activeTab === "headers"
-                        ? "bg-white/[0.1] text-white"
-                        : "text-zinc-400 hover:text-zinc-200"
-                    }`}
+                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded transition-colors ${activeTab === "headers"
+                      ? "bg-white/[0.1] text-white"
+                      : "text-zinc-400 hover:text-zinc-200"
+                      }`}
                   >
                     Headers
                   </button>
