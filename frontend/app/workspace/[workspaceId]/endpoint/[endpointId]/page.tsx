@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Clock,
   ArrowRightCircle,
+  Search,
+  Filter,
 } from "lucide-react";
 import {
   Pagination,
@@ -58,11 +60,24 @@ export default function EndpointDetailPage() {
     null
   );
   const [activeTab, setActiveTab] = useState<"headers" | "body">("body");
+  const [headerSearch, setHeaderSearch] = useState<string>("");
+  const [bodySearch, setBodySearch] = useState<string>("");
+  const [bodyViewMode, setBodyViewMode] = useState<"pretty" | "raw" | "form" | "collapsible">("pretty");
+  const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
   const [targetUrl, setTargetUrl] = useState("");
   const [replaying, setReplaying] = useState(false);
   const [replayResult, setReplayResult] = useState<string | null>(null);
+  const [method, setMethod] = useState<string>("POST");
+  const [headersText, setHeadersText] = useState<string>("");
+  const [bodyText, setBodyText] = useState<string>("");
+  const [showReplayCard, setShowReplayCard] = useState<boolean>(false);
+  const [replayResponseData, setReplayResponseData] = useState<any | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
+  const [showMethodFilter, setShowMethodFilter] = useState(false);
 
   useEffect(() => {
 
@@ -79,6 +94,15 @@ export default function EndpointDetailPage() {
 
     return () => eventSource.close();
   }, [endpointId]);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+
+
   const fetchRequests = async () => {
     try {
       setLoading(true);
@@ -140,23 +164,147 @@ export default function EndpointDetailPage() {
     return `${seconds}s ago`;
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      console.error('Copy failed', e);
+    }
+  };
+
+  const prettyBodyString = (body: any) => {
+    try {
+      return typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+    } catch (e) {
+      return String(body || '');
+    }
+  }
+
+  const toggleExpandAll = (expand: boolean) => {
+    // simple approach: clear or set a marker
+    if (!selectedRequest) return;
+    if (expand) {
+      setExpandedPaths({"/": true});
+    } else {
+      setExpandedPaths({});
+    }
+  }
+
+  // Collapsible JSON viewer (simple)
+  const CollapsibleJSON = ({ data, path = '/' }: { data: any; path?: string }) => {
+    const isObject = data && typeof data === 'object' && !Array.isArray(data);
+    const isArray = Array.isArray(data);
+    const expanded = !!expandedPaths[path];
+    return (
+      <div className="text-[13px] font-mono text-zinc-200">
+        { (isObject || isArray) ? (
+          <div>
+            <button
+              onClick={() => setExpandedPaths(prev => ({ ...prev, [path]: !expanded }))}
+              className="text-[12px] text-zinc-400 mr-2"
+            >
+              {expanded ? '−' : '+'}
+            </button>
+            <span className="text-zinc-300">{isArray ? '[ ]' : '{ }'}</span>
+            {expanded && (
+              <div className="pl-5 mt-2">
+                {isArray ? (
+                  (data as any[]).map((item, i) => (
+                    <div key={i} className="mb-1">
+                      <div className="inline-block text-zinc-400">[{i}]</div>
+                      <CollapsibleJSON data={item} path={`${path}${i}/`} />
+                    </div>
+                  ))
+                ) : (
+                  Object.entries(data).map(([k, v]) => (
+                    <div key={k} className="mb-1">
+                      <div className="inline-block w-36 text-zinc-300">{k}:</div>
+                      <CollapsibleJSON data={v} path={`${path}${k}/`} />
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="text-zinc-200">{String(data)}</span>
+        )}
+      </div>
+    )
+  }
+
   const replayfetch = async () => {
     if (!selectedRequest || !targetUrl.trim()) return;
     try {
       setReplaying(true);
       setReplayResult(null);
-      await apiFetch(`/webhook/api/request/${selectedRequest.id}/replay`, {
-        method: "POST",
-        body: JSON.stringify({ targetUrl: targetUrl.trim() }),
+
+      // parse headersText (lines like "Key: value") into object
+      const headers: Record<string, string> = {};
+      headersText.split("\n").map((l) => l.trim()).filter(Boolean).forEach((line) => {
+        const idx = line.indexOf(":");
+        if (idx > -1) {
+          const k = line.slice(0, idx).trim();
+          const v = line.slice(idx + 1).trim();
+          if (k) headers[k] = v;
+        }
       });
-      setReplayResult("Replayed successfully");
+
+      // try parse bodyText as JSON
+      let body: any = null;
+      try {
+        body = bodyText ? JSON.parse(bodyText) : null;
+      } catch (e) {
+        // if not JSON, send as raw string
+        body = bodyText;
+      }
+
+      console.log('Replay payload', { targetUrl: targetUrl.trim(), method, headers, body });
+      const res = await apiFetch(`/webhook/api/request/${selectedRequest.id}/replay`, {
+        method: "POST",
+        body: JSON.stringify({ targetUrl: targetUrl.trim(), method, headers, body }),
+      });
+
+      if (res?.networkError || res?.replayed === false) {
+        setReplayResponseData(null);
+        setReplayResult("Replay Failed\n\nCould not connect to the target server.");
+        return;
+      }
+
+      // store detailed response for UI
+      setReplayResponseData(res);
+      setReplayResult(null);
     } catch (err) {
-      setReplayResult("Replay failed");
+      setReplayResponseData(null);
+      setReplayResult("Replay Failed\n\nCould not connect to the target server.");
       console.error(err);
     } finally {
       setReplaying(false);
     }
   };
+
+  // when selectedRequest changes, populate method/headers/body editors
+  useEffect(() => {
+    if (!selectedRequest) return;
+    setMethod(selectedRequest.method || "POST");
+    setHeadersText(
+      Object.entries(selectedRequest.headers || {}).map(([k, v]) => `${k}: ${v}`).join("\n")
+    );
+    try {
+      setBodyText(selectedRequest.body ? JSON.stringify(selectedRequest.body, null, 2) : "");
+    } catch (e) {
+      setBodyText("");
+    }
+    setReplayResult(null);
+    setShowReplayCard(false);
+    setReplayResponseData(null);
+  }, [selectedRequest]);
+
+  const filteredRequests = requests.filter(req => {
+    const matchesSearch = !debouncedSearch || req.id.toLowerCase().includes(debouncedSearch.toLowerCase());
+    const matchesMethod = selectedMethods.length === 0 || selectedMethods.includes(req.method.toUpperCase());
+    return matchesSearch && matchesMethod;
+  });
 
   return (
     <ProtectedRoute>
@@ -213,8 +361,56 @@ export default function EndpointDetailPage() {
                 Requests
               </span>
               <span className="text-[12px] bg-white/[0.05] border border-white/[0.1] px-2 py-0.5 rounded text-zinc-300">
-                {requests.length} total
+                {filteredRequests.length} total
               </span>
+            </div>
+
+            <div className="px-4 py-3 border-b border-white/[0.08] bg-[#0A0A0A] flex flex-col gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <Input
+                  type="text"
+                  placeholder="Search requests by ID..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 h-8 bg-[#111] border-white/[0.08] text-[13px] text-zinc-200 placeholder:text-zinc-600 rounded"
+                />
+              </div>
+              <div className="relative">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full h-8 flex items-center justify-between bg-[#111] border border-white/[0.08] hover:bg-white/[0.05] text-zinc-300 text-[13px]"
+                  onClick={() => setShowMethodFilter(!showMethodFilter)}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5" />
+                    {selectedMethods.length === 0 ? "All Methods" : `${selectedMethods.length} Selected`}
+                  </span>
+                </Button>
+                
+                {showMethodFilter && (
+                  <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-[#111] border border-white/[0.08] rounded-md shadow-lg z-20 flex flex-col gap-1">
+                    {["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => (
+                      <label key={method} className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/[0.05] rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedMethods.includes(method)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMethods([...selectedMethods, method]);
+                            } else {
+                              setSelectedMethods(selectedMethods.filter(m => m !== method));
+                            }
+                          }}
+                          className="rounded border-white/[0.2] bg-transparent text-white"
+                        />
+                        <span className={`text-[12px] font-mono font-bold ${methodColors[method].split(' ')[2]}`}>{method}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -229,13 +425,13 @@ export default function EndpointDetailPage() {
                     Retry
                   </Button>
                 </div>
-              ) : requests.length === 0 ? (
+              ) : filteredRequests.length === 0 ? (
                 <div className="p-8 text-center flex flex-col items-center">
                   <Clock className="w-6 h-6 text-zinc-500 mb-3" />
                   <p className="text-[14px] text-zinc-300">Waiting for requests...</p>
                 </div>
               ) : (
-                requests.map((req) => (
+                filteredRequests.map((req) => (
                   <button
                     key={req.id}
                     onClick={() => setSelectedRequest(req)}
@@ -376,49 +572,167 @@ export default function EndpointDetailPage() {
                   </div>
                 </div>
 
-                <div className="mb-6 bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <ArrowRightCircle className="w-4 h-4 text-zinc-400" />
-                    <h3 className="text-[14px] font-medium text-zinc-200">
-                      Replay Request
-                    </h3>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      type="url"
-                      value={targetUrl}
-                      onChange={(e) => {
-                        setTargetUrl(e.target.value);
-                        setReplayResult(null);
-                      }}
-                      placeholder="https://api.example.com/webhook"
-                      className="flex-1 bg-[#111] border-white/[0.08] text-[14px] h-9"
-                    />
+                {!showReplayCard ? (
+                  <div className="mb-4">
                     <Button
-                      variant="primary"
-                      onClick={replayfetch}
-                      disabled={replaying || !targetUrl.trim()}
-                      className="h-9 shrink-0"
+                      variant="secondary"
+                      onClick={() => setShowReplayCard(true)}
+                      className="h-9 px-3"
                     >
-                      {replaying ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                      ) : (
-                        <Play className="w-3.5 h-3.5 mr-1.5" />
-                      )}
+                      <Play className="w-3.5 h-3.5 mr-2" />
                       Replay
                     </Button>
                   </div>
-                  {replayResult && (
-                    <p
-                      className={`mt-2 text-[13px] font-medium ${replayResult.includes("success")
-                        ? "text-green-400"
-                        : "text-red-400"
-                        }`}
+                ) : (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div
+                      className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                      onClick={() => setShowReplayCard(false)}
+                    />
+                    <div
+                      className="relative w-[1100px] max-w-[95%] mx-4 bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {replayResult}
-                    </p>
-                  )}
-                </div>
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <ArrowRightCircle className="w-4 h-4 text-zinc-400" />
+                          <h3 className="text-[14px] font-medium text-zinc-200">Replay Request</h3>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setShowReplayCard(false)}>
+                          Close
+                        </Button>
+                      </div>
+
+                      <div className="flex gap-2 items-center mb-3">
+                        <select
+                          value={method}
+                          onChange={(e) => setMethod(e.target.value)}
+                          className="bg-[#111] border border-white/[0.08] text-[13px] text-zinc-200 h-9 px-2 rounded w-28"
+                        >
+                          {[
+                            "GET",
+                            "POST",
+                            "PUT",
+                            "PATCH",
+                            "DELETE",
+                            "HEAD",
+                            "OPTIONS",
+                          ].map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+
+                        <Input
+                          type="url"
+                          value={targetUrl}
+                          onChange={(e) => {
+                            setTargetUrl(e.target.value);
+                            setReplayResult(null);
+                          }}
+                          placeholder="https://api.example.com/webhook"
+                          className="flex-1 bg-[#111] border-white/[0.08] text-[14px] h-9"
+                        />
+
+                        <Button
+                          variant="primary"
+                          onClick={replayfetch}
+                          disabled={replaying || !targetUrl.trim()}
+                          className="h-9 shrink-0"
+                        >
+                          {replaying ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                          ) : (
+                            <Play className="w-3.5 h-3.5 mr-1.5" />
+                          )}
+                          Send Replay
+                        </Button>
+                      </div>
+
+                      <div className="mb-3 grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-[13px] text-zinc-300 font-medium mb-2">Headers</div>
+                          <textarea
+                            value={headersText}
+                            onChange={(e) => { setHeadersText(e.target.value); setReplayResult(null); }}
+                            rows={14}
+                            className="w-full bg-[#0B0B0B] border border-white/[0.06] rounded p-3 text-[13px] font-mono text-zinc-200 resize-none"
+                            placeholder="Content-Type: application/json\nX-Custom-Header: abc"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="text-[13px] text-zinc-300 font-medium mb-2">Body</div>
+                          <textarea
+                            value={bodyText}
+                            onChange={(e) => { setBodyText(e.target.value); setReplayResult(null); }}
+                            rows={14}
+                            className="w-full bg-[#0B0B0B] border border-white/[0.06] rounded p-3 text-[13px] font-mono text-zinc-200 resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      {replayResponseData ? (
+                        <div className="mt-4 border-t border-white/[0.06] pt-4">
+                          <h4 className="text-[14px] font-medium text-zinc-200 mb-2">Replay Result</h4>
+                          <div className="text-[13px] text-zinc-300 mb-2 grid grid-cols-2 gap-4">
+                            <div><span className="text-zinc-400">Status</span><div className="font-mono">{replayResponseData.status} {replayResponseData.statusText}</div></div>
+                            <div><span className="text-zinc-400">Duration</span><div className="font-mono">{replayResponseData.duration}ms</div></div>
+                          </div>
+
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-[13px] text-zinc-300 font-medium">Response Headers</div>
+                              <button onClick={() => copyToClipboard(JSON.stringify(replayResponseData.responseHeaders || {}, null, 2))} className="text-[12px] text-zinc-300 bg-white/[0.03] px-2 py-1 rounded">Copy</button>
+                            </div>
+                            <div className="bg-[#070707] border border-white/[0.03] rounded p-2 text-[13px] font-mono text-zinc-200">
+                              {Object.entries(replayResponseData.responseHeaders || {}).map(([k, v]) => (
+                                <div key={k} className="flex items-center justify-between gap-4 py-0.5">
+                                  <div className="text-zinc-400 w-56 truncate">{k as string}</div>
+                                  <div className="flex-1 text-zinc-200 truncate">{v as string}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-[13px] text-zinc-300 font-medium">Response Body</div>
+                              <div className="flex items-center gap-2">
+                                <select value={bodyViewMode} onChange={(e) => setBodyViewMode(e.target.value as any)} className="bg-[#111] border border-white/[0.06] text-[13px] rounded px-2 py-1">
+                                  <option value="pretty">Pretty</option>
+                                  <option value="raw">Raw</option>
+                                  <option value="collapsible">Collapsible</option>
+                                </select>
+                                <button onClick={() => copyToClipboard(JSON.stringify(replayResponseData.responseBody, null, 2))} className="text-[12px] text-zinc-300 bg-white/[0.03] px-2 py-1 rounded">Copy</button>
+                              </div>
+                            </div>
+
+                            <div className="bg-[#070707] border border-white/[0.03] rounded p-3 text-[13px] font-mono text-zinc-200 max-h-[40vh] overflow-auto">
+                              {bodyViewMode === 'collapsible' ? (
+                                <CollapsibleJSON data={replayResponseData.responseBody} />
+                              ) : bodyViewMode === 'raw' ? (
+                                <pre className="whitespace-pre-wrap">{typeof replayResponseData.responseBody === 'string' ? replayResponseData.responseBody : JSON.stringify(replayResponseData.responseBody)}</pre>
+                              ) : (
+                                <pre className="whitespace-pre-wrap">{prettyBodyString(replayResponseData.responseBody)}</pre>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : replayResult ? (
+                        <p
+                          className={`mt-2 text-[13px] font-medium whitespace-pre-line ${replayResult.includes("success")
+                            ? "text-green-400"
+                            : "text-red-400"
+                            }`}
+                        >
+                          {replayResult}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-1 mb-4 p-1 bg-white/[0.03] border border-white/[0.08] rounded w-fit">
                   <button
