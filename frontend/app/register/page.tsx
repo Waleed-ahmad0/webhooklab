@@ -48,7 +48,7 @@ export default function Page() {
         body: JSON.stringify({ email, password, firstName, lastName }),
       });
   res
-)
+
       if (res.message === 'success')  {
         router.push("/login");
       }

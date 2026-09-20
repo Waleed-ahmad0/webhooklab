@@ -21,7 +21,7 @@ export async function deleteuser(req: Request, res: Response) {
         const { email } = req.body
 
         if (!email) {
-            return res.status(404).json({error:"email not found"})
+            return res.status(400).json({ error: "email not found" })
         }
         if (!userId) {
             return res.status(401).json({ error: 'unauthorized' })
