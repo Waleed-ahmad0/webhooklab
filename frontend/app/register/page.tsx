@@ -47,7 +47,6 @@ export default function Page() {
         method: "POST",
         body: JSON.stringify({ email, password, firstName, lastName }),
       });
-console.log(
   res
 )
       if (res.message === 'success')  {

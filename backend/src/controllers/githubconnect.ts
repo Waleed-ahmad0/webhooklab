@@ -12,7 +12,6 @@ export const listGithubRepos = async (req: Request, res: Response) => {
         if (!token?.githubAccessToken) {
             return res.status(400).json({ error: "GitHub not connected" });
         }
-        console.log('token mil gaya', token.githubAccessToken)
         const ghRes = await fetch("https://api.github.com/user/repos", {
             headers: { Authorization: `Bearer ${token.githubAccessToken}` },
         });

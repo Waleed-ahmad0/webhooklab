@@ -31,7 +31,6 @@ export async function getdeliveries(req: Request, res: Response) {
         const deliveries = await ghRes.json()
         return res.status(200).json(deliveries)
     } catch (error) {
-        console.log('Error fetching deliveries:', error)
         return res.status(500).json({ error: 'Internal server error' })
     }
 }

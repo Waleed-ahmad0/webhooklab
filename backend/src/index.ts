@@ -50,5 +50,4 @@ app.all('/webhook/api/h/:token', receiveWebhook) // creating webhook request of 
 app.post("/api/register", createUser); // creating user
 app.delete('/api/user', requireAuth, deleteuser)
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
 });

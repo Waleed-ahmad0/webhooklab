@@ -35,7 +35,6 @@ export async function deleteuser(req: Request, res: Response) {
         return res.status(201).json({ message: 'user delted successfully' })
 
     } catch (error) {
-        console.log(error)
         res.status(500).json({ error: 'internal server error' })
 
     }

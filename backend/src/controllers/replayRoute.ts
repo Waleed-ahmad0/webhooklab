@@ -8,7 +8,6 @@ export const replayRequest = async (req: Request, res: Response) => {
         const { requestId } = req.params;
         const { targetUrl, method: overrideMethod, headers: overrideHeaders, body: overrideBody } = req.body;
 
-        console.log('Replay endpoint received body:', req.body);
         const storedRequest = await prisma.webhookRequest.findUnique({
             where: { id: requestId as string },
         });

@@ -106,12 +106,10 @@ export default function EndpointDetailPage() {
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      console.log(currentPage)
       const data = await apiFetch(
         `/webhook/api/endpoint/request/${endpointId}?page=${currentPage}&limit=25`,
         { method: "GET" }
       );
-      console.log(data)
       setWorkspaceName(data.workspaceName)
       setendpointName(data.endpointName)
       setRequests(data.requests);
@@ -259,7 +257,6 @@ export default function EndpointDetailPage() {
         body = bodyText;
       }
 
-      console.log('Replay payload', { targetUrl: targetUrl.trim(), method, headers, body });
       const res = await apiFetch(`/webhook/api/request/${selectedRequest.id}/replay`, {
         method: "POST",
         body: JSON.stringify({ targetUrl: targetUrl.trim(), method, headers, body }),

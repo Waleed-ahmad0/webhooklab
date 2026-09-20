@@ -14,7 +14,6 @@ export const createUser = async (req: Request, res: Response) => {
     const user = await prisma.user.create({
       data: { email, firstName, lastName, password: hashed },
     });
-    console.log(user)
     res.status(201).json({message : 'success'});
   } catch (error) {
     console.error(error);

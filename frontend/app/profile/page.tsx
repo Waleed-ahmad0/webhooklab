@@ -104,7 +104,6 @@ export default function AccountProfile() {
             try {
                 setIsLoading(true);
                 const response = await fetch("/api/user");
-                console.log(response);
                 if (!response.ok) {
                     seterror(true);
                     throw new Error("Failed to fetch profile data");

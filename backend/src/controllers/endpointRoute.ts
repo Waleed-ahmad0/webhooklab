@@ -57,11 +57,12 @@ export const webhookendpoint = async (req: Request, res: Response) => {
         await prisma.endpoint.delete({
           where: { id: tempEndpoint.id }
         })
+      } else {
+        await prisma.endpoint.update({
+          where: { token: tempEndpoint.token },
+          data: { githubhookId: data.id, },
+        });
       }
-      await prisma.endpoint.update({
-        where: { token: tempEndpoint.token },
-        data: { githubhookId: data.id, },
-      });
       return res.status(ghRes.status).json(data);
     } else {
       const createEndpoint = await prisma.endpoint.create({
