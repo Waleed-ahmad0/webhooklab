@@ -19,6 +19,10 @@ export async function deleteuser(req: Request, res: Response) {
     try {
         const userId = req.userId
         const { email } = req.body
+
+        if (!email) {
+            return res.status(404).json({error:"email not found"})
+        }
         if (!userId) {
             return res.status(401).json({ error: 'unauthorized' })
         }
@@ -32,7 +36,7 @@ export async function deleteuser(req: Request, res: Response) {
 
         }
         await prisma.user.delete({ where: { id: finduser?.id } })
-        return res.status(201).json({ message: 'user delted successfully' })
+        return res.status(200).json({ message: 'user delted successfully' })
 
     } catch (error) {
         res.status(500).json({ error: 'internal server error' })

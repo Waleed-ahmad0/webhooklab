@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
+import { assertSafeReplayTarget } from "../lib/ipcheck";
 import { checkEndpointOwnership } from "../lib/authorizations";
 
 export const replayRequest = async (req: Request, res: Response) => {
@@ -32,32 +33,37 @@ export const replayRequest = async (req: Request, res: Response) => {
 
         const methodToUse = (overrideMethod || storedRequest.method || 'POST').toString().toUpperCase();
 
-        // Determine body to send. For GET/HEAD methods, no body is sent.
         let bodyToSend: any = undefined;
         if (methodToUse !== 'GET' && methodToUse !== 'HEAD') {
             if (overrideBody !== undefined) {
-                // If client provided a raw string, send as-is; otherwise stringify objects
                 bodyToSend = typeof overrideBody === 'string' ? overrideBody : JSON.stringify(overrideBody);
             } else {
                 bodyToSend = storedRequest.body ? JSON.stringify(storedRequest.body) : undefined;
             }
         }
 
+        try {
+            await assertSafeReplayTarget(finalUrl);
+        } catch (err) {
+            return res.status(400).json({ error: (err as Error).message });
+        }
+
         const start = Date.now();
         const replayResponse = await fetch(finalUrl, {
+            redirect: 'manual',
             method: methodToUse,
             headers: headersToReplay,
             body: bodyToSend,
+            signal: AbortSignal.timeout(10_000),
+
         });
         const duration = Date.now() - start;
 
-        // collect headers
         const responseHeaders: Record<string, string> = {};
         replayResponse.headers.forEach((v, k) => {
             responseHeaders[k] = v;
         });
 
-        // read body as text and try parse JSON
         let responseText: string | null = null;
         try {
             responseText = await replayResponse.text();
@@ -72,7 +78,9 @@ export const replayRequest = async (req: Request, res: Response) => {
                 parsedBody = responseText;
             }
         }
-
+        if (replayResponse.status >= 300 && replayResponse.status < 400) {
+            return res.status(400).json({ error: "Target attempted a redirect — not followed for safety" });
+        }
         return res.status(200).json({
             replayed: true,
             status: replayResponse.status,
