@@ -2,7 +2,7 @@
 
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import {
   Zap,
   ChevronRight,
   Play,
+  Edit3,
+  Trash2,
   Loader2,
   AlertCircle,
   Clock,
@@ -60,8 +62,8 @@ export default function EndpointDetailPage() {
     null
   );
   const [activeTab, setActiveTab] = useState<"headers" | "body">("body");
-  const [headerSearch, setHeaderSearch] = useState<string>("");
-  const [bodySearch, setBodySearch] = useState<string>("");
+  // const [headerSearch, setHeaderSearch] = useState<string>("");
+  // const [bodySearch, setBodySearch] = useState<string>("");
   const [bodyViewMode, setBodyViewMode] = useState<"pretty" | "raw" | "form" | "collapsible">("pretty");
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
   const [targetUrl, setTargetUrl] = useState("");
@@ -78,6 +80,14 @@ export default function EndpointDetailPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
   const [showMethodFilter, setShowMethodFilter] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
 
@@ -128,7 +138,12 @@ export default function EndpointDetailPage() {
 
   useEffect(() => {
     if (endpointId) fetchRequests();
+    // keep renameValue in sync when endpointName updates
   }, [endpointId, currentPage]);
+
+  useEffect(() => {
+    setRenameValue(endpointName || "");
+  }, [endpointName]);
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -178,15 +193,15 @@ export default function EndpointDetailPage() {
     }
   }
 
-  const toggleExpandAll = (expand: boolean) => {
-    // simple approach: clear or set a marker
-    if (!selectedRequest) return;
-    if (expand) {
-      setExpandedPaths({"/": true});
-    } else {
-      setExpandedPaths({});
-    }
-  }
+  // const toggleExpandAll = (expand: boolean) => {
+  //   // simple approach: clear or set a marker
+  //   if (!selectedRequest) return;
+  //   if (expand) {
+  //     setExpandedPaths({"/": true});
+  //   } else {
+  //     setExpandedPaths({});
+  //   }
+  // }
 
   // Collapsible JSON viewer (simple)
   const CollapsibleJSON = ({ data, path = '/' }: { data: any; path?: string }) => {
@@ -195,7 +210,7 @@ export default function EndpointDetailPage() {
     const expanded = !!expandedPaths[path];
     return (
       <div className="text-[13px] font-mono text-zinc-200">
-        { (isObject || isArray) ? (
+        {(isObject || isArray) ? (
           <div>
             <button
               onClick={() => setExpandedPaths(prev => ({ ...prev, [path]: !expanded }))}
@@ -280,6 +295,56 @@ export default function EndpointDetailPage() {
     }
   };
 
+  const renameEndpoint = async () => {
+    if (!renameValue || !endpointId) return;
+    try {
+      setRenaming(true);
+      setRenameError(null);
+      const res = await apiFetch(`/webhook/api/endpoint`, {
+        method: "PATCH",
+        body: JSON.stringify({ endpointName: renameValue, endpointId }),
+      });
+
+      if (res?.error) {
+        setRenameError(res.error || "Failed to rename");
+        return;
+      }
+
+      setShowRenameModal(false);
+      // refresh page to pick up new name
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setRenameError("Failed to rename endpoint");
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const deleteEndpoint = async () => {
+    if (!endpointId) return;
+    try {
+      setDeleting(true);
+      console.log('deleting started')
+      setDeleteError(null);
+      const res = await apiFetch(`/webhook/api/endpoint`, {
+        method: "DELETE",
+        body: JSON.stringify({ endpointId }),
+      });
+      if (res?.error) {
+        setDeleteError(res.error || "Failed to delete");
+        return;
+      }
+      // navigate back to workspace page
+      router.replace(`/workspace/${workspaceId}`);
+    } catch (err) {
+      console.error(err);
+      setDeleteError("Failed to delete endpoint");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // when selectedRequest changes, populate method/headers/body editors
   useEffect(() => {
     if (!selectedRequest) return;
@@ -342,9 +407,19 @@ export default function EndpointDetailPage() {
                 {workspaceName}
               </Link>
               <ChevronRight className="w-3.5 h-3.5" />
-              <span className="text-zinc-200 font-mono px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
-                {endpointName}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-200 font-mono px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
+                  {endpointName}
+                </span>
+                <button
+                  onClick={() => { setRenameValue(endpointName || ""); setShowRenameModal(true); }}
+                  className="text-zinc-400 hover:text-zinc-200 p-1"
+                  aria-label="Rename endpoint"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+                {/* delete moved into rename modal's danger zone */}
+              </div>
             </div>
           </div>
         </div>
@@ -385,7 +460,7 @@ export default function EndpointDetailPage() {
                     {selectedMethods.length === 0 ? "All Methods" : `${selectedMethods.length} Selected`}
                   </span>
                 </Button>
-                
+
                 {showMethodFilter && (
                   <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-[#111] border border-white/[0.08] rounded-md shadow-lg z-20 flex flex-col gap-1">
                     {["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => (
@@ -467,7 +542,7 @@ export default function EndpointDetailPage() {
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
-                        onClick={() => 
+                        onClick={() =>
                           setCurrentPage((p) => Math.max(1, p - 1))
 
                         }
@@ -810,6 +885,72 @@ export default function EndpointDetailPage() {
             )}
           </div>
         </div>
+        {/* Rename Modal */}
+        {showRenameModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowRenameModal(false)}
+            />
+            <div className="relative w-[420px] bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[14px] font-medium text-zinc-200">Rename Endpoint</h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowRenameModal(false)}>Close</Button>
+              </div>
+
+              <div className="mb-3">
+                <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} placeholder="Endpoint name" />
+                {renameError && <p className="text-red-400 text-[13px] mt-2">{renameError}</p>}
+              </div>
+
+              <div className="mb-4 border border-red-600/30 bg-red-600/5 p-3 rounded">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[13px] font-medium text-red-400">Danger Zone</div>
+                    <p className="text-[13px] text-zinc-300">Deleting this endpoint is permanent and cannot be undone.</p>
+                  </div>
+                  <div>
+                    <Button variant="destructive" onClick={() => { setShowRenameModal(false); setShowDeleteModal(true); }} disabled={deleting}>
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="secondary" onClick={() => setShowRenameModal(false)}>Cancel</Button>
+                <Button variant="primary" onClick={renameEndpoint} disabled={renaming || !renameValue}>
+                  {renaming ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Delete confirmation Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowDeleteModal(false)}
+            />
+            <div className="relative w-[420px] bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[14px] font-medium text-zinc-200">Delete Endpoint</h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowDeleteModal(false)}>Close</Button>
+              </div>
+
+              <p className="text-zinc-300 mb-4">Are you sure you want to delete this endpoint? This action cannot be undone.</p>
+              {deleteError && <p className="text-red-400 text-[13px] mb-2">{deleteError}</p>}
+
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={deleteEndpoint} disabled={deleting}>
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   );

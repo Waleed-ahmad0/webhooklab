@@ -7,6 +7,7 @@ export async function apiFetch(path: string, options?: RequestInit) {
     ...options,
   });
   const check = await res.json()
+  console.log
   if (!res.ok) {
     console.error(check.error, res.status)
     throw new Error(`API error: ${check.error} `);
