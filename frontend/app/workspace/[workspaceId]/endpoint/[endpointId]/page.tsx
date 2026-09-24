@@ -329,7 +329,7 @@ export default function EndpointDetailPage() {
       setDeleteError(null);
       const res = await apiFetch(`/webhook/api/endpoint`, {
         method: "DELETE",
-        body: JSON.stringify({ endpointId }),
+        body: JSON.stringify({ endpointId, message:'delete', endpointName   }),
       });
       if (res?.error) {
         setDeleteError(res.error || "Failed to delete");

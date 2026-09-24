@@ -50,8 +50,10 @@ export const updateendpoint = async (req: Request, res: Response) => {
 
         }
 
-        const [owner, repoName] = repo.split("/");
-
+        let owner, repoName;
+        if (endpoint.githubRepo && typeof endpoint.githubRepo === "string") {
+            [owner, repoName] = endpoint.githubRepo.split("/");
+        }
         const ghRes = await fetch(
             `https://api.github.com/repos/${owner}/${repoName}/hooks/${endpoint.githubhookId}`,
             {
@@ -92,18 +94,17 @@ export async function deleteenpoint(req: Request, res: Response) {
             req: { headers: new Headers(req.headers as Record<string, string>) },
             secret: process.env.AUTH_SECRET!
         });
-        const { endpointId, repo, message } = req.body
-        let owner, repoName;
-        if (repo && typeof repo === "string") {
-            [owner, repoName] = repo.split("/");
-        }
+        const { endpointId, message } = req.body
 
         const userId = req.userId
         const checkowner = await checkEndpointOwnership(endpointId, userId)
         if (('error' in checkowner)) return res.status(checkowner.status as number).json({ error: checkowner.error });
         if (!('endpoint' in checkowner)) return res.status(404).json({ error: 'Endpoint not found' });
         const endpoint = checkowner.endpoint;
-
+        let owner, repoName;
+        if (endpoint.githubRepo && typeof endpoint.githubRepo === "string") {
+            [owner, repoName] = endpoint.githubRepo.split("/");
+        }
         if (owner && repoName && endpoint.githubhookId && token?.githubAccessToken && message === 'disconnect') {
             const response = await webhookDelete(owner, repoName, endpoint.githubhookId, token?.githubAccessToken)
             if (response.message) {
