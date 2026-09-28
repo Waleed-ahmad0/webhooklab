@@ -122,22 +122,20 @@ export async function deleteenpoint(req: Request, res: Response) {
                 if (!deleteendpoint) {
                     return res.status(500).json({ error: "failed to delete endpoint" })
                 }
-                return res.status(201).json({ error: "endpoint deleted" })
+                return res.status(200).json({ error: "endpoint deleted" })
 
             } else {
                 return res.status(400).json({ error: "failed to disconnect" })
             }
 
         } else {
-            const deleteendpoint = await prisma.endpoint.delete({ where: { id: endpoint.id } })
-            if (!deleteendpoint) {
-                return res.status(500).json({ error: "failed to delete endpoint" })
-            }
+            await prisma.endpoint.delete({ where: { id: endpoint.id } })
+
             return res.status(200).json({ message: "endpoint deleted" })
 
         }
     } catch (error) {
-        return res.status(500).json({ error: "internal sever error" })
+        return res.status(500).json({ error: "internal server error" })
 
     }
 }

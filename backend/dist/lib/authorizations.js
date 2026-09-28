@@ -19,7 +19,7 @@ async function checkEndpointOwnership(endpointId, userId) {
     const workspaceCheck = await checkWorkspaceOwnership(endpoint.workspaceId, userId);
     if ("error" in workspaceCheck)
         return workspaceCheck;
-    return { endpoint };
+    return { endpoint, workspace: workspaceCheck.workspace };
 }
 async function usercheck(user) {
     const user_check = await prisma_1.prisma.user.findUnique({ where: { id: user } });

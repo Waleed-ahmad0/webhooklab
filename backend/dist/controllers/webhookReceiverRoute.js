@@ -4,13 +4,14 @@ exports.receiveWebhook = void 0;
 exports.getawebhookrequest = getawebhookrequest;
 const prisma_1 = require("../lib/prisma");
 const authorizations_1 = require("../lib/authorizations");
+const sseClients_1 = require("../lib/sseClients");
 const receiveWebhook = async (req, res) => {
     try {
         const { token } = req.params;
         const endpoint = await prisma_1.prisma.endpoint.findUnique({ where: { token: token } });
         if (!endpoint)
             return res.status(404).json({ error: "Endpoint not found" });
-        await prisma_1.prisma.webhookRequest.create({
+        const newRequest = await prisma_1.prisma.webhookRequest.create({
             data: {
                 endpointId: endpoint.id,
                 method: req.method,
@@ -18,6 +19,7 @@ const receiveWebhook = async (req, res) => {
                 body: req.body,
             },
         });
+        (0, sseClients_1.broadcastToEndpoint)(endpoint.id, newRequest);
         res.status(200).json({ received: true });
     }
     catch (error) {

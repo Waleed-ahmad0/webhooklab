@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createUser } from "./controllers/registerRoute";
 import { getAllWorkspaceEndpoints, getEndpointRequests, webhookendpoint } from "./controllers/endpointRoute";
-import { getworkspace, workspaceFunc } from "./controllers/workspaceRoute";
+import { getworkspace, workspaceFunc, updateWorkspaceFunc, deleteWorkspaceFunc } from "./controllers/workspaceRoute";
 import { getawebhookrequest, receiveWebhook } from "./controllers/webhookReceiverRoute";
 import { replayRequest } from "./controllers/replayRoute";
 import { ExpressAuth } from "@auth/express"
@@ -14,7 +14,7 @@ import { authConfig } from "./lib/auth";
 import { deleteuser, getuserdata } from "./controllers/userController";
 import { listGithubRepos } from "./controllers/githubconnect";
 import { deleteenpoint, updateendpoint } from "./controllers/updateendpointsRoute";
-import {getdeliveries} from "./controllers/deliveriesRoute"
+import { getdeliveries } from "./controllers/deliveriesRoute"
 dotenv.config();
 
 const app = express();
@@ -43,8 +43,12 @@ app.post("/webhook/api/request/:requestId/replay", requireAuth, replayRequest); 
 
 
 app.patch('/webhook/api/endpoint', requireAuth, updateendpoint)
+app.patch('/webhook/api/workspace/:workspaceId', requireAuth, updateWorkspaceFunc)
 
 app.delete('/webhook/api/endpoint', requireAuth, deleteenpoint)
+app.delete('/webhook/api/workspace/:workspaceId', requireAuth, deleteWorkspaceFunc)
+// app.delete('/webhook/api/workspaces/endpoints/:workspaceId', requireAuth) // get all the  endpoints of a specific workspace // 
+
 app.all('/webhook/api/h/:token', receiveWebhook) // creating webhook request of an endpoint
 
 app.post("/api/register", createUser); // creating user

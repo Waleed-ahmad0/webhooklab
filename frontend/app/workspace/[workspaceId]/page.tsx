@@ -2,7 +2,7 @@
 
 import { apiFetch } from "@/lib/api";
 import { useEffect, useState } from "react";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -19,6 +19,10 @@ import {
   AlertCircle,
   Copy,
   Check,
+  Settings,
+  PencilLine,
+  Trash2,
+  ShieldAlert,
 } from "lucide-react";
 
 interface Endpoint {
@@ -45,8 +49,9 @@ const fadeUp: Variants = {
 export default function WorkspaceDetailPage() {
   const params = useParams();
   const workspaceId = params.workspaceId as string;
-  const pathname = usePathname()
-  
+  const pathname = usePathname();
+  const router = useRouter();
+
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +59,12 @@ export default function WorkspaceDetailPage() {
   const [newEndpointName, setNewEndpointName] = useState("");
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState(workspaceId);
+  const [renameDraft, setRenameDraft] = useState(workspaceName);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const fetchEndpoints = async () => {
     try {
@@ -70,8 +81,30 @@ export default function WorkspaceDetailPage() {
   };
 
   useEffect(() => {
-    if (workspaceId) fetchEndpoints();
+    if (workspaceId) {
+      fetchEndpoints();
+      fetchWorkspaceName();
+    }
   }, [workspaceId]);
+
+  const fetchWorkspaceName = async () => {
+    try {
+      const workspaces = await apiFetch("/webhook/api/workspaces", { method: "GET" });
+      const currentWorkspace = workspaces.find((ws: { id: string; name: string }) => ws.id === workspaceId);
+
+      if (currentWorkspace) {
+        setWorkspaceName(currentWorkspace.name);
+        setRenameDraft(currentWorkspace.name);
+      } else {
+        setWorkspaceName(workspaceId);
+        setRenameDraft(workspaceId);
+      }
+    } catch (err) {
+      console.error("Failed to load workspace details", err);
+      setWorkspaceName(workspaceId);
+      setRenameDraft(workspaceId);
+    }
+  };
 
   const handleCreateEndpoint = async () => {
     if (!newEndpointName.trim()) return;
@@ -111,6 +144,46 @@ export default function WorkspaceDetailPage() {
 
   const getWebhookUrl = (token: string) => {
     return `${process.env.NEXT_PUBLIC_API_URL}/webhook/api/h/${token}`;
+  };
+
+  const handleRenameWorkspace = async () => {
+    const trimmed = renameDraft.trim();
+    if (!trimmed || trimmed === workspaceName) {
+      setShowSettingsMenu(false);
+      return;
+    }
+
+    try {
+      setIsRenaming(true);
+      const updatedWorkspace = await apiFetch(`/webhook/api/workspace/${workspaceId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: trimmed }),
+      });
+
+      setWorkspaceName(updatedWorkspace.name);
+      setRenameDraft(updatedWorkspace.name);
+      setShowSettingsMenu(false);
+    } catch (err) {
+      console.error("Failed to rename workspace", err);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    try {
+      setIsDeleting(true);
+      await apiFetch(`/webhook/api/workspace/${workspaceId}`, {
+        method: "DELETE",
+      });
+      setShowDeleteConfirm(false);
+      setShowSettingsMenu(false);
+      router.push("/workspace");
+    } catch (err) {
+      console.error("Failed to delete workspace", err);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -153,14 +226,109 @@ export default function WorkspaceDetailPage() {
         </header>
 
         <main className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-10">
-          <div className="flex items-center gap-2 text-[13px] text-zinc-500 mb-6">
-            <Link href="/workspace" className="hover:text-white transition-colors">
-              Workspaces
-            </Link>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-zinc-300 font-mono text-[11px] px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
-              {workspaceId}
-            </span>
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-2 text-[13px] text-zinc-500">
+              <Link href="/workspace" className="hover:text-white transition-colors">
+                Workspaces
+              </Link>
+              <ChevronRight className="w-3.5 h-3.5" />
+              <span className="text-zinc-300 font-mono text-[11px] px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
+                {workspaceName}
+              </span>
+            </div>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowSettingsMenu((prev) => !prev)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/[0.08] bg-[#0A0A0A] text-zinc-300 transition-colors hover:border-white/[0.15] hover:text-white"
+                aria-label="Workspace settings"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+
+              <AnimatePresence>
+                {showSettingsMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute right-0 top-full z-30 mt-2 w-[340px] rounded-xl border border-white/[0.1] bg-[#0A0A0A] p-4 shadow-2xl"
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Workspace</p>
+                        <h3 className="text-sm font-medium text-white">Settings</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSettingsMenu(false)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-white/[0.08] text-zinc-400 hover:text-white"
+                        aria-label="Close settings"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2 rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
+                        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+                          <PencilLine className="h-3.5 w-3.5" />
+                          Rename workspace
+                        </div>
+                        <Input
+                          value={renameDraft}
+                          onChange={(e) => setRenameDraft(e.target.value)}
+                          placeholder="Workspace name"
+                          className="bg-[#111] border-white/[0.08]"
+                        />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full justify-center"
+                          onClick={handleRenameWorkspace}
+                          disabled={isRenaming || !renameDraft.trim()}
+                        >
+                          {isRenaming ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            "Save changes"
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
+                        <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-red-300">
+                          <ShieldAlert className="h-3.5 w-3.5" />
+                          Danger zone
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-white">Delete workspace</p>
+                            <p className="text-[12px] text-zinc-400">This permanently removes the workspace and its endpoints.</p>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              setShowDeleteConfirm(true);
+                              setShowSettingsMenu(false);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           <motion.div
@@ -373,6 +541,59 @@ export default function WorkspaceDetailPage() {
                       )}
                     </Button>
                   </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                onClick={() => setShowDeleteConfirm(false)}
+              />
+
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97, y: 12 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className="relative w-full max-w-[420px] mx-4 rounded-xl border border-red-500/25 bg-[#0A0A0A] p-6 shadow-2xl"
+              >
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <h2 className="text-lg font-semibold text-white">Delete workspace?</h2>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  Are you sure you want to delete <span className="font-medium text-zinc-200">{workspaceName}</span>? This action cannot be undone and will permanently remove the workspace and all related endpoints.
+                </p>
+
+                <div className="mt-6 flex gap-3">
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setShowDeleteConfirm(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    onClick={handleDeleteWorkspace}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      "Yes, delete"
+                    )}
+                  </Button>
                 </div>
               </motion.div>
             </div>
