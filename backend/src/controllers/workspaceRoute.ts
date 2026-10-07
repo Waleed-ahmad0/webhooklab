@@ -100,26 +100,51 @@ export async function deleteWorkspaceFunc(req: Request, res: Response) {
 
         const github_endpoints = endpoints.filter(e => e.githubRepoId)
 
-        const successfulGitHubIds: string[] = []
+        const githubResults = await Promise.all(
+            github_endpoints.map(async (e) => {
+                const githubRepo = e.githubRepo;
 
-        const githubPromises = github_endpoints.map(async (e) => {
-            const githubRepo = e.githubRepo;
-            if (!githubRepo) return;
-
-            const [owner, repoName] = githubRepo.split("/");
-            if (!owner || !repoName) return;
-
-            const ghRes = await fetch(
-                `https://api.github.com/repos/${owner}/${repoName}/hooks/${e.githubhookId}`,
-                {
-                    method: "DELETE",
-                    headers: { Authorization: `Bearer ${token?.githubAccessToken}` },
+                if (!githubRepo || !e.githubhookId) {
+                    return {
+                        endpointId: e.id,
+                        success: false,
+                    };
                 }
-            );
+                const [owner, repoName] = githubRepo.split("/");
 
-            if (ghRes.ok || ghRes.status === 404) { successfulGitHubIds.push(e.id) };
-        });
-        await Promise.all(githubPromises);
+                if (!owner || !repoName) {
+                    return {
+                        endpointId: e.id,
+                        success: false,
+                    };
+                }
+
+                try {
+                    const ghRes = await fetch(
+                        `https://api.github.com/repos/${owner}/${repoName}/hooks/${e.githubhookId}`,
+                        {
+                            method: "DELETE",
+                            headers: {
+                                Authorization: `Bearer ${token?.githubAccessToken}`,
+                            },
+                        }
+                    );
+
+                    return {
+                        endpointId: e.id,
+                        success: ghRes.ok || ghRes.status === 404,
+                    };
+                } catch {
+                    return {
+                        endpointId: e.id,
+                        success: false,
+                    };
+                }
+            })
+        );
+        const successfulGitHubIds = githubResults
+            .filter(result => result.success)
+            .map(result => result.endpointId);
         if (github_endpoints.length === successfulGitHubIds.length) {
             const deleted = await prisma.workspace.delete({
                 where: { id: workspace.id }
@@ -137,35 +162,40 @@ export async function deleteWorkspaceFunc(req: Request, res: Response) {
 
         console.log(successfulGitHubIds)
 
-        return res.status(200).json({ success: true, message: "Workspace deleted" });
+        return res.status(502).json({
+            success: false,
+            message: "Some GitHub webhooks could not be deleted. Please try again.",
+            deletedHooks: successfulGitHubIds.length,
+            remainingHooks: github_endpoints.length - successfulGitHubIds.length,
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ error: "internal server error" });
     }
 }
-export async function deleteAllWorkspaceEndpoints(req: Request, res: Response) {
+// export async function deleteAllWorkspaceEndpoints(req: Request, res: Response) {
 
-    const userId = req.userId;
-    const workspaceIdParam = req.params.workspaceId;
-    const workspaceId = Array.isArray(workspaceIdParam) ? workspaceIdParam[0] : workspaceIdParam;
+//     const userId = req.userId;
+//     const workspaceIdParam = req.params.workspaceId;
+//     const workspaceId = Array.isArray(workspaceIdParam) ? workspaceIdParam[0] : workspaceIdParam;
 
-    const token = await getToken({
-        req: { headers: new Headers(req.headers as Record<string, string>) },
-        secret: process.env.AUTH_SECRET!
-    });
-    if (!workspaceId) {
-        return res.status(400).json({ error: "id is missing" })
-    }
-    const getworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, include: { endpoints: true } })
-    if (!getworkspace) {
-        return res.status(404).json({ error: "workspace not found" })
-    }
-    if (userId !== getworkspace.ownerId) {
-        return res.status(401).json({ error: "unauthorized" })
+//     const token = await getToken({
+//         req: { headers: new Headers(req.headers as Record<string, string>) },
+//         secret: process.env.AUTH_SECRET!
+//     });
+//     if (!workspaceId) {
+//         return res.status(400).json({ error: "id is missing" })
+//     }
+//     const getworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, include: { endpoints: true } })
+//     if (!getworkspace) {
+//         return res.status(404).json({ error: "workspace not found" })
+//     }
+//     if (userId !== getworkspace.ownerId) {
+//         return res.status(401).json({ error: "unauthorized" })
 
-    }
-    const endpoints = getworkspace.endpoints
-    const github_endpoints = endpoints.filter(e => e.githubRepoId)
-    console.log('getworkspace', getworkspace, 'github', github_endpoints)
+//     }
+//     const endpoints = getworkspace.endpoints
+//     const github_endpoints = endpoints.filter(e => e.githubRepoId)
+//     console.log('getworkspace', getworkspace, 'github', github_endpoints)
 
-}
+// }

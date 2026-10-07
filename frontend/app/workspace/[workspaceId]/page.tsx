@@ -31,6 +31,17 @@ interface Endpoint {
   token: string;
   workspaceId: string;
   createdAt: string;
+  // optional counts if backend provides them
+  requests?: number;
+  requestsToday?: number;
+}
+
+interface Overview {
+  title: string;
+  endpointsCount: number;
+  totalRequests: number;
+  todayRequests: number;
+  topEndpoints: { name: string; count: number }[];
 }
 
 const fadeUp: Variants = {
@@ -53,6 +64,7 @@ export default function WorkspaceDetailPage() {
   const router = useRouter();
 
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -72,6 +84,8 @@ export default function WorkspaceDetailPage() {
       const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, { method: "GET" });
       setEndpoints(data.endpoints);
       setError(null);
+      // attempt to build overview from returned data
+      buildOverviewFromEndpoints(data.endpoints, workspaceName);
     } catch (err) {
       setError("Failed to load endpoints");
       console.error(err);
@@ -80,12 +94,46 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const buildOverviewFromEndpoints = (eps: Endpoint[], title?: string) => {
+    const endpointsCount = eps.length;
+    const totalRequests = eps.reduce((s, e) => s + (e.requests || 0), 0);
+    const todayRequests = eps.reduce((s, e) => s + (e.requestsToday || 0), 0);
+    const topEndpoints = eps
+      .map((e) => ({ name: e.name, count: e.requests || 0 }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    setOverview({
+      title: title || workspaceName || "Workspace",
+      endpointsCount,
+      totalRequests,
+      todayRequests,
+      topEndpoints,
+    });
+  };
+
   useEffect(() => {
     if (workspaceId) {
       fetchEndpoints();
       fetchWorkspaceName();
     }
   }, [workspaceId]);
+
+  useEffect(() => {
+    // if endpoints load later, ensure overview is in sync
+    if (endpoints && endpoints.length > 0) {
+      buildOverviewFromEndpoints(endpoints, workspaceName);
+    } else if (!overview) {
+      // fallback overview when no endpoint-level counts available
+      setOverview({
+        title: workspaceName,
+        endpointsCount: endpoints.length,
+        totalRequests: 0,
+        todayRequests: 0,
+        topEndpoints: endpoints.map((e) => ({ name: e.name, count: 0 })).slice(0, 5),
+      });
+    }
+  }, [endpoints, workspaceName]);
 
   const fetchWorkspaceName = async () => {
     try {
@@ -337,12 +385,32 @@ export default function WorkspaceDetailPage() {
             transition={{ duration: 0.3 }}
             className="mb-8"
           >
-            <h1 className="text-2xl font-semibold tracking-tight text-white">
-              Endpoints
-            </h1>
-            <p className="mt-1 text-zinc-400 text-sm">
-              Create webhook endpoints and monitor incoming requests.
-            </p>
+            {/* Overview header */}
+            <div className="mb-5">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">{overview?.title || workspaceName}</h1>
+              <p className="mt-1 text-zinc-400 text-sm">Create webhook endpoints and monitor incoming requests.</p>
+            </div>
+
+            {/* Overview cards */}
+            <div className="mb-6 flex flex-col md:flex-row items-stretch gap-3">
+              <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
+                <p className="text-sm text-zinc-400">Endpoints</p>
+                <div className="text-2xl font-semibold text-white mt-2">{overview ? overview.endpointsCount : "—"}</div>
+              </div>
+
+              <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
+                <p className="text-sm text-zinc-400">Requests</p>
+                <div className="text-2xl font-semibold text-white mt-2">{overview ? overview.totalRequests.toLocaleString() : "—"}</div>
+              </div>
+
+              <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
+                <p className="text-sm text-zinc-400">Today</p>
+                <div className="text-2xl font-semibold text-white mt-2">{overview ? overview.todayRequests : "—"}</div>
+              </div>
+            </div>
+
+            {/* Top endpoints list */}
+           
           </motion.div>
 
           {loading && (
