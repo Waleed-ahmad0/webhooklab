@@ -32,16 +32,16 @@ interface Endpoint {
   workspaceId: string;
   createdAt: string;
   // optional counts if backend provides them
+  _count: { requests: number }
   requests?: number;
-  requestsToday?: number;
+  todaysRequest?: number;
 }
 
 interface Overview {
   title: string;
   endpointsCount: number;
   totalRequests: number;
-  todayRequests: number;
-  topEndpoints: { name: string; count: number }[];
+  todaysRequest: number;
 }
 
 const fadeUp: Variants = {
@@ -67,6 +67,8 @@ export default function WorkspaceDetailPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [TotalRequests, setTotalRequests] = useState<number>(0)
+  const [todaysRequest, settodaysRequest] = useState<number>(0)
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newEndpointName, setNewEndpointName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -82,10 +84,11 @@ export default function WorkspaceDetailPage() {
     try {
       setLoading(true);
       const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, { method: "GET" });
+      setTotalRequests(data.totalRequests)
+      settodaysRequest(data.todaysRequest)
       setEndpoints(data.endpoints);
+
       setError(null);
-      // attempt to build overview from returned data
-      buildOverviewFromEndpoints(data.endpoints, workspaceName);
     } catch (err) {
       setError("Failed to load endpoints");
       console.error(err);
@@ -94,23 +97,6 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const buildOverviewFromEndpoints = (eps: Endpoint[], title?: string) => {
-    const endpointsCount = eps.length;
-    const totalRequests = eps.reduce((s, e) => s + (e.requests || 0), 0);
-    const todayRequests = eps.reduce((s, e) => s + (e.requestsToday || 0), 0);
-    const topEndpoints = eps
-      .map((e) => ({ name: e.name, count: e.requests || 0 }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    setOverview({
-      title: title || workspaceName || "Workspace",
-      endpointsCount,
-      totalRequests,
-      todayRequests,
-      topEndpoints,
-    });
-  };
 
   useEffect(() => {
     if (workspaceId) {
@@ -120,17 +106,13 @@ export default function WorkspaceDetailPage() {
   }, [workspaceId]);
 
   useEffect(() => {
-    // if endpoints load later, ensure overview is in sync
     if (endpoints && endpoints.length > 0) {
-      buildOverviewFromEndpoints(endpoints, workspaceName);
     } else if (!overview) {
-      // fallback overview when no endpoint-level counts available
       setOverview({
         title: workspaceName,
         endpointsCount: endpoints.length,
         totalRequests: 0,
-        todayRequests: 0,
-        topEndpoints: endpoints.map((e) => ({ name: e.name, count: 0 })).slice(0, 5),
+        todaysRequest: 0,
       });
     }
   }, [endpoints, workspaceName]);
@@ -174,6 +156,7 @@ export default function WorkspaceDetailPage() {
 
   const copyToClipboard = async (text: string, id: string) => {
     try {
+
       await navigator.clipboard.writeText(text);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
@@ -387,7 +370,7 @@ export default function WorkspaceDetailPage() {
           >
             {/* Overview header */}
             <div className="mb-5">
-              <h1 className="text-2xl font-semibold tracking-tight text-white">{overview?.title || workspaceName}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">{workspaceName}</h1>
               <p className="mt-1 text-zinc-400 text-sm">Create webhook endpoints and monitor incoming requests.</p>
             </div>
 
@@ -395,22 +378,22 @@ export default function WorkspaceDetailPage() {
             <div className="mb-6 flex flex-col md:flex-row items-stretch gap-3">
               <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
                 <p className="text-sm text-zinc-400">Endpoints</p>
-                <div className="text-2xl font-semibold text-white mt-2">{overview ? overview.endpointsCount : "—"}</div>
+                <div className="text-2xl font-semibold text-white mt-2">{endpoints.length}</div>
               </div>
 
               <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
                 <p className="text-sm text-zinc-400">Requests</p>
-                <div className="text-2xl font-semibold text-white mt-2">{overview ? overview.totalRequests.toLocaleString() : "—"}</div>
+                <div className="text-2xl font-semibold text-white mt-2">{TotalRequests}</div>
               </div>
 
               <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
                 <p className="text-sm text-zinc-400">Today</p>
-                <div className="text-2xl font-semibold text-white mt-2">{overview ? overview.todayRequests : "—"}</div>
+                <div className="text-2xl font-semibold text-white mt-2">{todaysRequest}</div>
               </div>
             </div>
 
             {/* Top endpoints list */}
-           
+
           </motion.div>
 
           {loading && (
@@ -488,53 +471,53 @@ export default function WorkspaceDetailPage() {
                   custom={index}
                   className="group rounded-lg border border-white/[0.08] bg-[#0A0A0A] hover:bg-[#111] hover:border-white/[0.15] transition-all"
                 >
-                  <div className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-white/[0.05] border border-white/[0.05] flex items-center justify-center shrink-0">
-                          <Link2 className="w-4 h-4 text-zinc-400" />
+                  <Link href={`/workspace/${workspaceId}/endpoint/${ep.id}`}>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-white/[0.05] border border-white/[0.05] flex items-center justify-center shrink-0">
+                            <Link2 className="w-4 h-4 text-zinc-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-medium text-white">
+                              {ep.name}
+                            </h3>
+                            <p className="text-[11px] text-zinc-500 mt-0.5">
+                              Created {formatDate(ep.createdAt)}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-sm font-medium text-white">
-                            {ep.name}
-                          </h3>
-                          <p className="text-[11px] text-zinc-500 mt-0.5">
-                            Created {formatDate(ep.createdAt)}
-                          </p>
-                        </div>
+
+                        <Button variant="outline" size="sm">
+                          Total Requests  {ep._count.requests}
+                        </Button>
                       </div>
 
-                      <Link href={`/workspace/${workspaceId}/endpoint/${ep.id}`}>
-                        <Button variant="outline" size="sm">
-                          View Requests
-                        </Button>
-                      </Link>
-                    </div>
 
-                    <div className="mt-4 flex items-center gap-2 bg-[#111] rounded border border-white/[0.05] px-2.5 py-1.5">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                        URL
-                      </span>
-                      <code className="text-[11px] text-zinc-300 font-mono flex-1 truncate ml-2 border-l border-white/[0.05] pl-3">
-                        {getWebhookUrl(ep.token)}
-                      </code>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          copyToClipboard(getWebhookUrl(ep.token), ep.id);
-                        }}
-                        className="shrink-0 w-6 h-6 rounded flex items-center justify-center hover:bg-white/[0.08] transition-colors text-zinc-400 hover:text-white"
-                        title="Copy URL"
-                      >
-                        {copiedId === ep.id ? (
-                          <Check className="w-3.5 h-3.5 text-white" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
+                      <div className="mt-4 flex items-center gap-2 bg-[#111] rounded border border-white/[0.05] px-2.5 py-1.5">
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                          URL
+                        </span>
+                        <code className="text-[11px] text-zinc-300 font-mono flex-1 truncate ml-2 border-l border-white/[0.05] pl-3">
+                          {getWebhookUrl(ep.token)}
+                        </code>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            copyToClipboard(getWebhookUrl(ep.token), ep.id);
+                          }}
+                          className="shrink-0 w-6 h-6 rounded flex items-center justify-center hover:bg-white/[0.08] transition-colors text-zinc-400 hover:text-white"
+                          title="Copy URL"
+                        >
+                          {copiedId === ep.id ? (
+                            <Check className="w-3.5 h-3.5 text-white" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
+                  </Link>  </motion.div>
               ))}
             </motion.div>
           )}

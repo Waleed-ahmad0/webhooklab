@@ -19,7 +19,7 @@ dotenv.config();
 
 const app = express();
 app.use(cookieParser());
-const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:3000"].filter(Boolean) as string[];
+const allowedOrigins = [process.env.FRONTEND_URL].filter(Boolean) as string[];
 app.use(cors({ origin: allowedOrigins, credentials: true }))
 app.set("trust proxy", true)
 app.use("/auth", ExpressAuth(authConfig))
@@ -39,7 +39,7 @@ app.get('/webhook/api/endpoint/:endpointId/github/deliveries', requireAuth, getd
 
 app.post('/webhook/api/workspace', requireAuth, workspaceFunc) //creating workspace of a user //
 app.post("/webhook/api/endpoint", requireAuth, webhookendpoint) // creating endpoint in a workspace //
-app.post("/webhook/api/request/:requestId/replay", requireAuth, replayRequest); // for replaying an webhook request
+app.post("/webhook/api/request/:requestId/replay", requireAuth, replayRequest); // for replaying a webhook request
 
 
 app.patch('/webhook/api/endpoint', requireAuth, updateendpoint)
@@ -47,7 +47,7 @@ app.patch('/webhook/api/workspace/:workspaceId', requireAuth, updateWorkspaceFun
 
 app.delete('/webhook/api/endpoint', requireAuth, deleteenpoint)
 app.delete('/webhook/api/workspace/:workspaceId', requireAuth, deleteWorkspaceFunc)
-// app.delete('/webhook/api/workspaces/endpoints/:workspaceId', requireAuth) // get all the  endpoints of a specific workspace // 
+// app.delete('/webhook/api/workspaces/endpoints/:workspaceId', requireAuth) // get all the endpoints of a specific workspace // 
 
 app.all('/webhook/api/h/:token', receiveWebhook) // creating webhook request of an endpoint
 

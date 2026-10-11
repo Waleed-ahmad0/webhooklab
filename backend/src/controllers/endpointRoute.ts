@@ -123,13 +123,51 @@ export const getEndpointRequests = async (req: Request, res: Response) => {
 export async function getAllWorkspaceEndpoints(req: Request, res: Response) {
   try {
     const userId = req.userId
-    const { workspaceId } = req.params
-    const checkworkspace = await checkWorkspaceOwnership(workspaceId as string, userId)
+    const workspaceId = req.params.workspaceId as string
+    const checkworkspace = await checkWorkspaceOwnership(workspaceId, userId)
     if ('error' in checkworkspace) {
       return res.status(checkworkspace.status as number).json({ error: checkworkspace.error })
     }
-    const getallendpoints = await prisma.endpoint.findMany({ where: { workspaceId: workspaceId as string } })
-    const addedworksapcename = { workspaceName: checkworkspace.workspace.name, endpoints: getallendpoints }
+    const getallrequestcount = await prisma.webhookRequest.count({
+      where: {
+        endpoint: {
+          workspaceId: workspaceId
+        }
+      }
+    })
+    const now = new Date();
+
+    const startOfToday = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate()
+    ));
+
+    const startOfTomorrow = new Date(
+      startOfToday.getTime() + 24 * 60 * 60 * 1000
+    );
+    const todaysRequest = await prisma.webhookRequest.count({
+      where: {
+        endpoint: {
+          workspaceId: workspaceId
+        },
+        receivedAt: {
+          gte: startOfToday,
+          lt: startOfTomorrow
+        }
+      }
+    })
+    const getallendpoints = await prisma.endpoint.findMany({
+      where: { workspaceId: workspaceId },
+      include: {
+        _count: {
+          select: {
+            requests: true,
+          },
+        },
+      },
+    });
+    const addedworksapcename = {todaysRequest, totalRequests: getallrequestcount, workspaceName: checkworkspace.workspace.name, endpoints: getallendpoints }
     return res.status(200).json(addedworksapcename)
   } catch (error) {
     console.error(error)

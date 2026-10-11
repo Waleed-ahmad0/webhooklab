@@ -325,7 +325,6 @@ export default function EndpointDetailPage() {
     if (!endpointId) return;
     try {
       setDeleting(true);
-      console.log('deleting started')
       setDeleteError(null);
       const res = await apiFetch(`/webhook/api/endpoint`, {
         method: "DELETE",

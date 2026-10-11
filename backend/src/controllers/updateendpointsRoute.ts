@@ -26,7 +26,6 @@ export const updateendpoint = async (req: Request, res: Response) => {
         });
         const userId = req.userId
         const { events, endpointId, repo, endpointName } = req.body
-        console.log("updating endpoint", endpointId, endpointName)
         const getendpoint = await checkEndpointOwnership(endpointId, userId)
         if ("error" in getendpoint) return res.status(getendpoint.status as number).json({ error: getendpoint.error });
         if (!('endpoint' in getendpoint)) return res.status(404).json({ error: 'Endpoint not found' });
@@ -34,7 +33,6 @@ export const updateendpoint = async (req: Request, res: Response) => {
         const endpoint = getendpoint.endpoint;
 
         if (endpointName) {
-            console.log("updating name")
             const updateName = await prisma.endpoint.update({
                 where: {
                     id: endpoint.id
@@ -122,7 +120,7 @@ export async function deleteenpoint(req: Request, res: Response) {
                 if (!deleteendpoint) {
                     return res.status(500).json({ error: "failed to delete endpoint" })
                 }
-                return res.status(200).json({ error: "endpoint deleted" })
+                return res.status(200).json({ message: "endpoint deleted" })
 
             } else {
                 return res.status(400).json({ error: "failed to disconnect" })
