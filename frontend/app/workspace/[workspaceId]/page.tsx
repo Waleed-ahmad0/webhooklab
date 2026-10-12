@@ -598,7 +598,8 @@ export default function WorkspaceDetailPage() {
           )}
 
           {showDeleteConfirm && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            <div className="fixed inset-0 z-60
+             flex items-center justify-center">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

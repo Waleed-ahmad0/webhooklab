@@ -24,7 +24,6 @@ export const webhookendpoint = async (req: Request, res: Response) => {
           githubRepoId
         }
       });
-
       if (existingEndpoint) {
         return res.status(400).json({ error: "An endpoint for this GitHub repository already exists in this workspace." });
       }
@@ -167,7 +166,7 @@ export async function getAllWorkspaceEndpoints(req: Request, res: Response) {
         },
       },
     });
-    const addedworksapcename = {todaysRequest, totalRequests: getallrequestcount, workspaceName: checkworkspace.workspace.name, endpoints: getallendpoints }
+    const addedworksapcename = { todaysRequest, totalRequests: getallrequestcount, workspaceName: checkworkspace.workspace.name, endpoints: getallendpoints }
     return res.status(200).json(addedworksapcename)
   } catch (error) {
     console.error(error)

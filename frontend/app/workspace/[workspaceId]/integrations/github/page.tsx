@@ -106,7 +106,6 @@ export default function GithubIntegrationsPage() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchGithubRepos();
     void fetchWorkspaceEndpoints();
   }, [fetchGithubRepos, fetchWorkspaceEndpoints]);
@@ -132,14 +131,13 @@ export default function GithubIntegrationsPage() {
     setConfirmingConnection(false);
     setManagementMode(false);
   };
-  const openManageCard = (repo: GithubRepo) => {
+  const openManageCard = async (repo: GithubRepo) => {
     const endpoint = getEndpointForRepo(repo);
     if (!endpoint) {
       console.error('No endpoint found for the selected repository');
       return;
     }
 
-    // Open the card immediately
     setSelectedRepo(repo);
     const events = endpoint.events ?? ['push', 'pull_request', 'issues'];
     setSelectedEvents(events);
@@ -148,49 +146,70 @@ export default function GithubIntegrationsPage() {
     setDeliveries([]);
     setLoadingDeliveries(true);
 
-    // Fetch deliveries in the background
-    apiFetch(`/webhook/api/endpoint/${endpoint.id}/github/deliveries`, { method: 'GET' })
-      .then((getdeliveries) => {
-        const list = Array.isArray(getdeliveries)
-          ? getdeliveries
-          : Array.isArray(getdeliveries?.deliveries)
+    try {
+      const getdeliveries = await apiFetch(
+        `/webhook/api/endpoint/${endpoint.id}/github/deliveries`,
+        { method: 'GET' }
+      );
+      const list = Array.isArray(getdeliveries)
+        ? getdeliveries
+        : Array.isArray(getdeliveries?.deliveries)
           ? getdeliveries.deliveries
           : [];
 
-        const mapped = list.map((d: any) => {
-          const id = d.id ?? d.deliveryId;
-          const event = d.event || d.type || d.name || 'unknown';
+      const mapped = list.map((d: any) => {
+        const id = d.id ?? d.deliveryId;
+        const event = d.event || d.type || d.name || 'unknown';
 
-          const rawStatusCode = d.status_code ?? d.statusCode ?? d.responseStatus ?? d.response?.statusCode;
-          const statusNum = Number(rawStatusCode);
+        const rawStatusCode =
+          d.status_code ??
+          d.statusCode ??
+          d.responseStatus ??
+          d.response?.statusCode;
 
-          const durationMs = d.duration ?? d.durationMs ?? d.response?.durationMs ?? null;
-          const createdAt = d.delivered_at ?? d.createdAt ?? d.created_at ?? d.timestamp ?? null;
+        const statusNum = Number(rawStatusCode);
 
-          let success: boolean;
-          if (!Number.isNaN(statusNum)) {
-            success = statusNum >= 200 && statusNum < 400;
-          } else if (typeof d.status === 'string') {
-            const s = d.status.toLowerCase();
-            success = s === 'ok' || s === 'success';
-          } else {
-            success = Boolean(d.success ?? d.succeeded ?? d.ok ?? d.response?.ok);
-          }
+        const durationMs =
+          d.duration ?? d.durationMs ?? d.response?.durationMs ?? null;
 
-          return {
-            id,
-            event,
-            status: !Number.isNaN(statusNum) ? statusNum : rawStatusCode ?? d.status ?? '-',
-            durationMs,
-            createdAt,
-            success,
-          };
-        });
+        const createdAt =
+          d.delivered_at ??
+          d.createdAt ??
+          d.created_at ??
+          d.timestamp ??
+          null;
 
-        setDeliveries(mapped);
-      })
-      .catch((err) => console.error('Failed to fetch deliveries', err))
-      .finally(() => setLoadingDeliveries(false));
+        let success: boolean;
+
+        if (!Number.isNaN(statusNum)) {
+          success = statusNum >= 200 && statusNum < 400;
+        } else if (typeof d.status === 'string') {
+          const s = d.status.toLowerCase();
+          success = s === 'ok' || s === 'success';
+        } else {
+          success = Boolean(
+            d.success ?? d.succeeded ?? d.ok ?? d.response?.ok
+          );
+        }
+
+        return {
+          id,
+          event,
+          status: !Number.isNaN(statusNum)
+            ? statusNum
+            : rawStatusCode ?? d.status ?? '-',
+          durationMs,
+          createdAt,
+          success,
+        };
+      });
+
+      setDeliveries(mapped);
+    } catch (err) {
+      console.error('Failed to fetch deliveries', err);
+    } finally {
+      setLoadingDeliveries(false);
+    }
   };
 
   const toggleEvent = (eventName: string) => {
@@ -245,7 +264,13 @@ export default function GithubIntegrationsPage() {
     }
 
     try {
-      const check = await apiFetch(`/webhook/api/endpoint`, { method: 'DELETE', body: JSON.stringify({ endpointId: endpoint.id, repo: selectedRepo?.full_name }) });
+      const check = await apiFetch(`/webhook/api/endpoint`, {
+        method: 'DELETE',
+        body: JSON.stringify({ endpointId: endpoint.id, repo: selectedRepo?.full_name, message: "disconnect" })
+      });
+      if (check.error) {
+        return console.error(check.error)
+      }
     } catch (err) {
       console.error('Failed to delete endpoint', err);
     } finally {
