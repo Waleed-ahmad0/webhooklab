@@ -104,7 +104,7 @@ export async function deleteenpoint(req: Request, res: Response) {
         if (owner && repoName && endpoint.githubhookId && token?.githubAccessToken && message === 'disconnect') {
             const response = await webhookDelete(owner, repoName, endpoint.githubhookId, token?.githubAccessToken)//
             if (response.message) {
-                await prisma.endpoint.update({ where: { id: endpoint.id }, data: { githubhookId: null, githubRepoId: null } })
+                await prisma.endpoint.update({ where: { id: endpoint.id }, data: { githubhookId: null} })
                 return res.status(200).json({ message: "successfully disconnected " })
 
             } else {

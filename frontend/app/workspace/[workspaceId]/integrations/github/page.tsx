@@ -37,6 +37,7 @@ type WorkspaceEndpoint = {
   workspaceId: string;
   createdAt: string;
   githubRepoId?: string;
+  githubhookId:number,
   events?: string[];
 };
 
@@ -111,11 +112,14 @@ export default function GithubIntegrationsPage() {
   }, [fetchGithubRepos, fetchWorkspaceEndpoints]);
 
 
-
   const isRepoConnected = (repo: GithubRepo) => {
-    return workspaceEndpoints.some((endpoint) =>
-      endpoint.githubRepoId?.trim().toLowerCase() === String(repo.id)
+    return workspaceEndpoints.some(
+      (endpoint) =>
+        endpoint.githubRepoId != null &&
+        String(endpoint.githubRepoId).trim() === String(repo.id) &&
+        endpoint.githubhookId != null
     );
+
   };
 
   const getEndpointForRepo = (repo: GithubRepo) => {
