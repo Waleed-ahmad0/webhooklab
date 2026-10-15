@@ -1,29 +1,16 @@
 "use client";
 
 import { apiFetch } from "@/lib/api";
-import { useEffect, useState } from "react";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence, type Variants } from "framer-motion";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { Button } from "@/components/ui/button";
+import { AppHeader } from "@/components/app-header";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Zap,
-  Plus,
-  Link2,
-  ChevronRight,
-  X,
-  Loader2,
-  AlertCircle,
-  Copy,
-  Check,
-  Settings,
-  PencilLine,
-  Trash2,
-  ShieldAlert,
-} from "lucide-react";
+import { Plus, Link2, ChevronRight, Loader2, AlertCircle, Copy, Check, Settings, Trash2, FolderGit2, Edit3 } from "lucide-react";
 
 interface Endpoint {
   id: string;
@@ -31,115 +18,63 @@ interface Endpoint {
   token: string;
   workspaceId: string;
   createdAt: string;
-  // optional counts if backend provides them
-  _count: { requests: number }
-  requests?: number;
-  todaysRequest?: number;
+  _count?: { requests: number };
 }
-
-interface Overview {
-  title: string;
-  endpointsCount: number;
-  totalRequests: number;
-  todaysRequest: number;
-}
-
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.3,
-      delay: i * 0.05,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  }),
-};
 
 export default function WorkspaceDetailPage() {
-  const params = useParams();
-  const workspaceId = params.workspaceId as string;
-  const pathname = usePathname();
+  const { workspaceId } = useParams<{ workspaceId: string }>();
   const router = useRouter();
-
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
-  const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [TotalRequests, setTotalRequests] = useState<number>(0)
-  const [todaysRequest, settodaysRequest] = useState<number>(0)
+  const [totalRequests, setTotalRequests] = useState(0);
+  const [todaysRequest, setTodaysRequest] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newEndpointName, setNewEndpointName] = useState("");
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [settingsView, setSettingsView] = useState<"menu" | "rename" | "delete" | null>(null);
   const [workspaceName, setWorkspaceName] = useState(workspaceId);
   const [renameDraft, setRenameDraft] = useState(workspaceName);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const fetchEndpoints = async () => {
+  const fetchEndpoints = useCallback(async () => {
     try {
-      setLoading(true);
       const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, { method: "GET" });
-      setTotalRequests(data.totalRequests)
-      settodaysRequest(data.todaysRequest)
+      setTotalRequests(data.totalRequests ?? 0);
+      setTodaysRequest(data.todaysRequest ?? 0);
       setEndpoints(data.endpoints);
-
+      setWorkspaceName(data.workspaceName || workspaceId);
+      setRenameDraft(data.workspaceName || workspaceId);
       setError(null);
     } catch (err) {
-      setError("Failed to load endpoints");
-      console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to load endpoints.");
     } finally {
       setLoading(false);
-    }
-  };
-
-
-  useEffect(() => {
-    if (workspaceId) {
-      fetchEndpoints();
-      fetchWorkspaceName();
     }
   }, [workspaceId]);
 
   useEffect(() => {
-    if (endpoints && endpoints.length > 0) {
-    } else if (!overview) {
-      setOverview({
-        title: workspaceName,
-        endpointsCount: endpoints.length,
-        totalRequests: 0,
-        todaysRequest: 0,
-      });
+    async function load() {
+      await fetchEndpoints();
     }
-  }, [endpoints, workspaceName]);
+    load();
+  }, [fetchEndpoints]);
 
-  const fetchWorkspaceName = async () => {
-    try {
-      const workspaces = await apiFetch("/webhook/api/workspaces", { method: "GET" });
-      const currentWorkspace = workspaces.find((ws: { id: string; name: string }) => ws.id === workspaceId);
-
-      if (currentWorkspace) {
-        setWorkspaceName(currentWorkspace.name);
-        setRenameDraft(currentWorkspace.name);
-      } else {
-        setWorkspaceName(workspaceId);
-        setRenameDraft(workspaceId);
-      }
-    } catch (err) {
-      console.error("Failed to load workspace details", err);
-      setWorkspaceName(workspaceId);
-      setRenameDraft(workspaceId);
-    }
+  const openCreateDialog = () => {
+    setActionError(null);
+    setNewEndpointName("");
+    setShowCreateModal(true);
   };
 
   const handleCreateEndpoint = async () => {
-    if (!newEndpointName.trim()) return;
+    if (creating || !newEndpointName.trim()) return;
     try {
       setCreating(true);
+      setActionError(null);
       await apiFetch("/webhook/api/endpoint", {
         method: "POST",
         body: JSON.stringify({ name: newEndpointName.trim(), workspaceId }),
@@ -148,7 +83,7 @@ export default function WorkspaceDetailPage() {
       setShowCreateModal(false);
       await fetchEndpoints();
     } catch (err) {
-      console.error(err);
+      setActionError(err instanceof Error ? err.message : "Unable to create endpoint. Please try again.");
     } finally {
       setCreating(false);
     }
@@ -156,62 +91,47 @@ export default function WorkspaceDetailPage() {
 
   const copyToClipboard = async (text: string, id: string) => {
     try {
-
-      await navigator.clipboard.writeText(text);
+      setCopyError(null);
+      await navigator.clipboard.writeText(new URL(text, window.location.origin).href);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      console.error("Failed to copy");
+      setCopyError("Unable to copy the URL. Select and copy it manually.");
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const getWebhookUrl = (token: string) => {
-    return `${process.env.NEXT_PUBLIC_API_URL}/webhook/api/h/${token}`;
-  };
+  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const getWebhookUrl = (token: string) => `${process.env.NEXT_PUBLIC_API_URL ?? ""}/webhook/api/h/${token}`;
 
   const handleRenameWorkspace = async () => {
-    const trimmed = renameDraft.trim();
-    if (!trimmed || trimmed === workspaceName) {
-      setShowSettingsMenu(false);
-      return;
-    }
-
+    const name = renameDraft.trim();
+    if (isRenaming || !name || name === workspaceName) return;
     try {
       setIsRenaming(true);
+      setActionError(null);
       const updatedWorkspace = await apiFetch(`/webhook/api/workspace/${workspaceId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: trimmed }),
+        method: "PATCH", body: JSON.stringify({ name }),
       });
-
       setWorkspaceName(updatedWorkspace.name);
       setRenameDraft(updatedWorkspace.name);
-      setShowSettingsMenu(false);
+      setSettingsView(null);
     } catch (err) {
-      console.error("Failed to rename workspace", err);
+      setActionError(err instanceof Error ? err.message : "Unable to rename workspace. Please try again.");
     } finally {
       setIsRenaming(false);
     }
   };
 
   const handleDeleteWorkspace = async () => {
+    if (isDeleting) return;
     try {
       setIsDeleting(true);
-      await apiFetch(`/webhook/api/workspace/${workspaceId}`, {
-        method: "DELETE",
-      });
-      setShowDeleteConfirm(false);
-      setShowSettingsMenu(false);
+      setActionError(null);
+      await apiFetch(`/webhook/api/workspace/${workspaceId}`, { method: "DELETE" });
+      setSettingsView(null);
       router.push("/workspace");
     } catch (err) {
-      console.error("Failed to delete workspace", err);
+      setActionError(err instanceof Error ? err.message : "Unable to delete workspace. Please try again.");
     } finally {
       setIsDeleting(false);
     }
@@ -219,438 +139,107 @@ export default function WorkspaceDetailPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-black text-white relative overflow-hidden selection:bg-white/20">
-        <div className="pointer-events-none fixed inset-0 grid-pattern" />
-
-        <header className="relative z-10 border-b border-white/[0.08] bg-black/80 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-6 lg:px-8">
-            <div className="flex items-center justify-between h-14">
-              <Link href="/workspace" className="flex items-center gap-2 group">
-                <div className="w-7 h-7 rounded bg-white flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-black" />
-                </div>
-                <span className="text-base font-medium tracking-tight group-hover:text-zinc-300 transition-colors">
-                  WebhookLab
-                </span>
-              </Link>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                >
-                  <Link href={`${pathname}/integrations/github`} rel="noopener noreferrer">
-                    <Link2 className="w-4 h-4 mr-1.5" />
-                    Connect Github
-                  </Link>
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowCreateModal(true)}
-                >
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  New Endpoint
-                </Button>
-              </div>
+      <div className="min-h-screen bg-background text-foreground">
+        <AppHeader breadcrumbs={[{ label: "Workspaces", href: "/workspace" }, { label: workspaceName }]} />
+        <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+          <div className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="break-words text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-3xl">{workspaceName}</h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">Create webhook endpoints and monitor incoming requests.</p>
             </div>
-          </div>
-        </header>
-
-        <main className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 py-10">
-          <div className="flex items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-2 text-[13px] text-zinc-500">
-              <Link href="/workspace" className="hover:text-white transition-colors">
-                Workspaces
+            <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+              <Link href={`/workspace/${workspaceId}/integrations/github`} className={buttonVariants({ variant: "secondary", className: "w-fit" })}>
+                <FolderGit2 className="h-4 w-4" /> GitHub
               </Link>
-              <ChevronRight className="w-3.5 h-3.5" />
-              <span className="text-zinc-300 font-mono text-[11px] px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
-                {workspaceName}
-              </span>
-            </div>
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowSettingsMenu((prev) => !prev)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/[0.08] bg-[#0A0A0A] text-zinc-300 transition-colors hover:border-white/[0.15] hover:text-white"
-                aria-label="Workspace settings"
-              >
-                <Settings className="h-4 w-4" />
-              </button>
-
-              <AnimatePresence>
-                {showSettingsMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute right-0 top-full z-30 mt-2 w-[340px] rounded-xl border border-white/[0.1] bg-[#0A0A0A] p-4 shadow-2xl"
-                  >
-                    <div className="mb-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Workspace</p>
-                        <h3 className="text-sm font-medium text-white">Settings</h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowSettingsMenu(false)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-white/[0.08] text-zinc-400 hover:text-white"
-                        aria-label="Close settings"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="space-y-2 rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-                        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
-                          <PencilLine className="h-3.5 w-3.5" />
-                          Rename workspace
-                        </div>
-                        <Input
-                          value={renameDraft}
-                          onChange={(e) => setRenameDraft(e.target.value)}
-                          placeholder="Workspace name"
-                          className="bg-[#111] border-white/[0.08]"
-                        />
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="w-full justify-center"
-                          onClick={handleRenameWorkspace}
-                          disabled={isRenaming || !renameDraft.trim()}
-                        >
-                          {isRenaming ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            "Save changes"
-                          )}
-                        </Button>
-                      </div>
-
-                      <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
-                        <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-red-300">
-                          <ShieldAlert className="h-3.5 w-3.5" />
-                          Danger zone
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-white">Delete workspace</p>
-                            <p className="text-[12px] text-zinc-400">This permanently removes the workspace and its endpoints.</p>
-                          </div>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              setShowDeleteConfirm(true);
-                              setShowSettingsMenu(false);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <Button variant="primary" onClick={openCreateDialog} className="w-fit"><Plus className="h-4 w-4" /> New endpoint</Button>
+              <Button variant="outline" size="icon" aria-label="Workspace settings" title="Workspace settings" aria-haspopup="dialog" aria-expanded={settingsView !== null} onClick={() => { setActionError(null); setRenameDraft(workspaceName); setSettingsView("menu"); }}><Settings className="h-4 w-4" /></Button>
             </div>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="mb-8"
-          >
-            {/* Overview header */}
-            <div className="mb-5">
-              <h1 className="text-2xl font-semibold tracking-tight text-white">{workspaceName}</h1>
-              <p className="mt-1 text-zinc-400 text-sm">Create webhook endpoints and monitor incoming requests.</p>
-            </div>
-
-            {/* Overview cards */}
-            <div className="mb-6 flex flex-col md:flex-row items-stretch gap-3">
-              <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
-                <p className="text-sm text-zinc-400">Endpoints</p>
-                <div className="text-2xl font-semibold text-white mt-2">{endpoints.length}</div>
+          <dl className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { label: "Endpoints", value: endpoints.length },
+              { label: "Total requests", value: totalRequests },
+              { label: "Requests today (UTC)", value: todaysRequest },
+            ].map((stat) => (
+              <div key={stat.label} className="flex items-center justify-between gap-3 rounded-xl border-2 border-border-default bg-surface shadow-panel p-4 sm:block sm:p-5">
+                <dt className="text-sm text-muted-foreground">{stat.label}</dt>
+                <dd className="text-2xl font-semibold tabular-nums sm:mt-3">{loading || error ? "—" : stat.value.toLocaleString()}</dd>
               </div>
-
-              <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
-                <p className="text-sm text-zinc-400">Requests</p>
-                <div className="text-2xl font-semibold text-white mt-2">{TotalRequests}</div>
-              </div>
-
-              <div className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 flex-1">
-                <p className="text-sm text-zinc-400">Today</p>
-                <div className="text-2xl font-semibold text-white mt-2">{todaysRequest}</div>
-              </div>
-            </div>
-
-            {/* Top endpoints list */}
-
-          </motion.div>
+            ))}
+          </dl>
+          <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-base font-semibold">Endpoints</h2><span className="text-sm text-muted-foreground">{loading || error ? "" : `${endpoints.length} total`}</span></div>
+          {copyError && <p role="alert" className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{copyError}</p>}
+          <span role="status" className="sr-only">{copiedId ? "Webhook URL copied to clipboard." : ""}</span>
 
           {loading && (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-white/[0.08] bg-[#0A0A0A] p-4 animate-pulse"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-8 h-8 bg-white/[0.05] rounded" />
-                    <div className="flex-1">
-                      <div className="h-3 w-32 bg-white/[0.05] rounded mb-2" />
-                      <div className="h-2 w-48 bg-white/[0.03] rounded" />
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div role="status" aria-label="Loading endpoints" className="space-y-3">
+              {[1, 2, 3].map((i) => <div key={i} className="animate-pulse rounded-xl border-2 border-border-default bg-surface shadow-panel p-5"><div className="mb-4 h-4 w-32 rounded bg-surface-elevated" /><div className="h-8 w-full rounded bg-surface-raised" /></div>)}
             </div>
           )}
-
           {error && !loading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-20"
-            >
-              <div className="w-12 h-12 rounded border border-red-500/20 bg-red-500/10 flex items-center justify-center mb-4">
-                <AlertCircle className="w-5 h-5 text-red-500" />
-              </div>
-              <p className="text-zinc-400 text-sm mb-4">{error}</p>
-              <Button variant="secondary" size="sm" onClick={fetchEndpoints}>
-                Try Again
-              </Button>
-            </motion.div>
+            <div role="alert" className="flex flex-col items-center rounded-xl border-2 border-border-default bg-surface shadow-panel px-5 py-14 text-center">
+              <AlertCircle className="mb-4 h-7 w-7 text-red-400" />
+              <h3 className="text-base font-medium">Unable to load endpoints</h3>
+              <p className="mb-5 mt-2 max-w-lg break-words text-sm text-muted-foreground">{error}</p>
+              <Button variant="secondary" onClick={async () => { setLoading(true); await fetchEndpoints(); }}>Try again</Button>
+            </div>
           )}
-
           {!loading && !error && endpoints.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="flex flex-col items-center justify-center py-24"
-            >
-              <div className="w-16 h-16 rounded-lg bg-[#0A0A0A] border border-white/[0.08] flex items-center justify-center mb-5">
-                <Link2 className="w-6 h-6 text-zinc-500" />
-              </div>
-              <h2 className="text-lg font-medium text-white mb-1.5">
-                No endpoints yet
-              </h2>
-              <p className="text-zinc-400 text-sm mb-6 max-w-[280px] text-center">
-                Create your first endpoint to get a unique URL for receiving webhook requests.
-              </p>
-              <Button
-                variant="primary"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <Plus className="w-4 h-4 mr-1.5" />
-                Create Endpoint
-              </Button>
-            </motion.div>
+            <div className="flex flex-col items-center rounded-xl border-2 border-dashed border-border-default bg-surface px-5 py-16 text-center">
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl border-2 border-border-default bg-surface-raised"><Link2 className="h-6 w-6 text-secondary-foreground" /></div>
+              <h3 className="text-lg font-medium">No endpoints yet</h3>
+              <p className="mb-6 mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Create an endpoint to get a unique URL for receiving webhook requests.</p>
+              <Button variant="primary" onClick={openCreateDialog}><Plus className="h-4 w-4" /> Create endpoint</Button>
+            </div>
           )}
-
           {!loading && !error && endpoints.length > 0 && (
-            <motion.div
-              initial="hidden"
-              animate="visible"
-              variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
-              className="space-y-3"
-            >
-              {endpoints.map((ep, index) => (
-                <motion.div
-                  key={ep.id}
-                  variants={fadeUp}
-                  custom={index}
-                  className="group rounded-lg border border-white/[0.08] bg-[#0A0A0A] hover:bg-[#111] hover:border-white/[0.15] transition-all"
-                >
-                  <Link href={`/workspace/${workspaceId}/endpoint/${ep.id}`}>
-                    <div className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-white/[0.05] border border-white/[0.05] flex items-center justify-center shrink-0">
-                            <Link2 className="w-4 h-4 text-zinc-400" />
-                          </div>
-                          <div>
-                            <h3 className="text-sm font-medium text-white">
-                              {ep.name}
-                            </h3>
-                            <p className="text-[11px] text-zinc-500 mt-0.5">
-                              Created {formatDate(ep.createdAt)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <Button variant="outline" size="sm">
-                          Total Requests  {ep._count.requests}
-                        </Button>
-                      </div>
-
-
-                      <div className="mt-4 flex items-center gap-2 bg-[#111] rounded border border-white/[0.05] px-2.5 py-1.5">
-                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                          URL
-                        </span>
-                        <code className="text-[11px] text-zinc-300 font-mono flex-1 truncate ml-2 border-l border-white/[0.05] pl-3">
-                          {getWebhookUrl(ep.token)}
-                        </code>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            copyToClipboard(getWebhookUrl(ep.token), ep.id);
-                          }}
-                          className="shrink-0 w-6 h-6 rounded flex items-center justify-center hover:bg-white/[0.08] transition-colors text-zinc-400 hover:text-white"
-                          title="Copy URL"
-                        >
-                          {copiedId === ep.id ? (
-                            <Check className="w-3.5 h-3.5 text-white" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
+            <div className="space-y-3">
+              {endpoints.map((endpoint) => (
+                <article key={endpoint.id} className="min-w-0 rounded-xl border-2 border-border-default bg-surface shadow-panel p-4 transition-colors hover:border-border-strong sm:p-5">
+                  <Link href={`/workspace/${workspaceId}/endpoint/${endpoint.id}`} className="group flex min-w-0 items-start gap-3 rounded-md">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-default bg-surface-raised"><Link2 className="h-4 w-4 text-secondary-foreground" /></div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="break-words text-sm font-medium [overflow-wrap:anywhere] group-hover:text-foreground">{endpoint.name}</h3>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-muted-foreground"><span>Created {formatDate(endpoint.createdAt)}</span><span>{(endpoint._count?.requests ?? 0).toLocaleString()} requests</span></div>
                     </div>
-                  </Link>  </motion.div>
+                    <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+                  </Link>
+                  <div className="mt-4 flex min-w-0 items-center gap-2 rounded-lg border border-border-default bg-surface-raised py-1 pl-3 pr-1">
+                    <span className="hidden text-xs font-medium text-muted-foreground sm:inline">URL</span>
+                    <code title={getWebhookUrl(endpoint.token)} className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap py-2 font-mono text-xs text-secondary-foreground sm:ml-1 sm:border-l sm:border-border-default sm:pl-3">{getWebhookUrl(endpoint.token)}</code>
+                    <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={async () => { await copyToClipboard(getWebhookUrl(endpoint.token), endpoint.id); }} aria-label={copiedId === endpoint.id ? "URL copied" : `Copy URL for ${endpoint.name}`} title="Copy webhook URL">{copiedId === endpoint.id ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}</Button>
+                  </div>
+                </article>
               ))}
-            </motion.div>
+            </div>
           )}
         </main>
 
-        <AnimatePresence>
-          {showCreateModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={() => setShowCreateModal(false)}
-              />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="relative w-full max-w-[400px] mx-4 rounded-xl border border-white/[0.1] bg-[#0A0A0A] shadow-2xl p-6"
-              >
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-base font-medium">Create Endpoint</h2>
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="w-7 h-7 rounded hover:bg-white/[0.08] flex items-center justify-center transition-colors cursor-pointer text-zinc-400 hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+        <Dialog open={showCreateModal} onClose={() => { if (!creating) setShowCreateModal(false); }} title="Create endpoint" description="Each endpoint gets a unique URL for receiving webhooks.">
+          <form className="space-y-5" onSubmit={async (event) => { event.preventDefault(); await handleCreateEndpoint(); }}>
+            <div className="space-y-2"><Label htmlFor="endpoint-name">Endpoint name</Label><Input id="endpoint-name" value={newEndpointName} onChange={(event) => setNewEndpointName(event.target.value)} placeholder="e.g. Stripe payments" required autoFocus disabled={creating} /></div>
+            {actionError && <p role="alert" className="break-words rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{actionError}</p>}
+            <div className="flex flex-wrap items-center justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setShowCreateModal(false)} disabled={creating}>Cancel</Button><Button type="submit" variant="primary" disabled={creating || !newEndpointName.trim()}>{creating && <Loader2 className="h-4 w-4 animate-spin" />}{creating ? "Creating…" : "Create endpoint"}</Button></div>
+          </form>
+        </Dialog>
 
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="endpoint-name" className="text-xs text-zinc-400">Endpoint Name</Label>
-                    <Input
-                      id="endpoint-name"
-                      type="text"
-                      value={newEndpointName}
-                      onChange={(e) => setNewEndpointName(e.target.value)}
-                      onKeyDown={(e) =>
-                        e.key === "Enter" && handleCreateEndpoint()
-                      }
-                      placeholder="e.g. Stripe Payments"
-                      className="bg-[#111] border-white/[0.08]"
-                      autoFocus
-                    />
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      variant="secondary"
-                      className="flex-1"
-                      onClick={() => setShowCreateModal(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="primary"
-                      className="flex-1"
-                      onClick={handleCreateEndpoint}
-                      disabled={creating || !newEndpointName.trim()}
-                    >
-                      {creating ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-                          Creating...
-                        </>
-                      ) : (
-                        "Create"
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          )}
-
-          {showDeleteConfirm && (
-            <div className="fixed inset-0 z-60
-             flex items-center justify-center">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-                onClick={() => setShowDeleteConfirm(false)}
-              />
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.97, y: 12 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97, y: 12 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className="relative w-full max-w-[420px] mx-4 rounded-xl border border-red-500/25 bg-[#0A0A0A] p-6 shadow-2xl"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                <h2 className="text-lg font-semibold text-white">Delete workspace?</h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Are you sure you want to delete <span className="font-medium text-zinc-200">{workspaceName}</span>? This action cannot be undone and will permanently remove the workspace and all related endpoints.
-                </p>
-
-                <div className="mt-6 flex gap-3">
-                  <Button
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => setShowDeleteConfirm(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="flex-1"
-                    onClick={handleDeleteWorkspace}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      "Yes, delete"
-                    )}
-                  </Button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+        <Dialog open={settingsView !== null} onClose={() => { if (!isRenaming && !isDeleting) setSettingsView(null); }} title={settingsView === "rename" ? "Rename workspace" : settingsView === "delete" ? "Delete workspace?" : "Workspace settings"}>
+          {settingsView === "menu" && <div className="space-y-2">
+            <Button variant="ghost" autoFocus className="w-full justify-start text-foreground" onClick={() => { setRenameDraft(workspaceName); setActionError(null); setSettingsView("rename"); }}><Edit3 className="h-4 w-4" aria-hidden="true" />Rename workspace<ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" /></Button>
+            <Button variant="ghost" className="w-full justify-start text-red-300 hover:bg-red-500/10 hover:text-red-200" onClick={() => { setActionError(null); setSettingsView("delete"); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Delete workspace<ChevronRight className="ml-auto h-4 w-4" aria-hidden="true" /></Button>
+          </div>}
+          {settingsView === "rename" && <form className="space-y-5" onSubmit={async (event) => { event.preventDefault(); await handleRenameWorkspace(); }}>
+            <div className="space-y-2"><Label htmlFor="workspace-rename">Workspace name</Label><Input id="workspace-rename" value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} required autoFocus disabled={isRenaming} /></div>
+            {actionError && <p role="alert" className="break-words rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{actionError}</p>}
+            <div className="flex flex-wrap items-center justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setSettingsView("menu")} disabled={isRenaming}>Cancel</Button><Button type="submit" variant="primary" disabled={isRenaming || !renameDraft.trim() || renameDraft.trim() === workspaceName}>{isRenaming && <Loader2 className="h-4 w-4 animate-spin" />}{isRenaming ? "Saving…" : "Save changes"}</Button></div>
+          </form>}
+          {settingsView === "delete" && <div className="space-y-5">
+            <p className="text-sm leading-6 text-secondary-foreground">This will permanently delete <strong className="break-words font-medium text-foreground [overflow-wrap:anywhere]">{workspaceName}</strong> and all its endpoints. This action cannot be undone.</p>
+            {actionError && <p role="alert" className="break-words rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{actionError}</p>}
+            <div className="flex flex-wrap items-center justify-end gap-2"><Button variant="secondary" autoFocus onClick={() => setSettingsView("menu")} disabled={isDeleting}>Cancel</Button><Button variant="destructive" onClick={handleDeleteWorkspace} disabled={isDeleting}>{isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}{isDeleting ? "Deleting…" : "Delete workspace"}</Button></div>
+          </div>}
+        </Dialog>
       </div>
     </ProtectedRoute>
   );

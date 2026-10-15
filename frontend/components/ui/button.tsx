@@ -3,29 +3,29 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-400 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex w-fit max-w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-white text-zinc-950 hover:bg-zinc-200 shadow-sm",
+          "border-2 border-accent bg-accent text-accent-foreground hover:border-white hover:bg-white shadow-sm disabled:border-border-default disabled:bg-surface-raised disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none",
         primary:
-          "bg-white text-zinc-950 hover:bg-zinc-200 shadow-sm",
+          "border-2 border-accent bg-accent text-accent-foreground hover:border-white hover:bg-white shadow-sm disabled:border-border-default disabled:bg-surface-raised disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none",
         destructive:
-          "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20",
+          "bg-red-500/10 text-red-300 border-2 border-red-400/40 hover:bg-red-500/20",
         outline:
-          "border border-white/[0.1] bg-transparent text-white hover:bg-white/[0.05]",
+          "border-2 border-border-default bg-surface text-foreground hover:border-border-strong hover:bg-surface-elevated",
         secondary:
-          "bg-zinc-800 text-zinc-100 hover:bg-zinc-700",
+          "border-2 border-border-default bg-surface-raised text-foreground hover:border-border-strong hover:bg-surface-elevated",
         ghost:
-          "text-zinc-400 hover:bg-white/[0.05] hover:text-white",
-        link: "text-zinc-300 underline-offset-4 hover:underline",
+          "text-secondary-foreground hover:bg-surface-elevated hover:text-foreground",
+        link: "text-secondary-foreground underline-offset-4 hover:text-foreground hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-10 px-4 py-2",
+        sm: "h-9 px-3 text-sm",
+        lg: "h-11 px-6",
+        icon: "h-11 w-11",
       },
     },
     defaultVariants: {

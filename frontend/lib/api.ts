@@ -1,16 +1,15 @@
 export async function apiFetch(path: string, options?: RequestInit) {
-  const res = await fetch(`${path}`, {
+  const headers = new Headers(options?.headers);
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const res = await fetch(path, {
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
     ...options,
+    headers,
   });
-  const check = await res.json()
-  console.log
+  const check = await res.json().catch(() => null);
   if (!res.ok) {
-    console.error(check.error, res.status)
-    throw new Error(`API error: ${check.error} `);
+    const message = typeof check?.error === "string" ? check.error : check?.message;
+    throw new Error(typeof message === "string" ? message : `Request failed (${res.status}). Please try again.`);
   }
   return check;
 }

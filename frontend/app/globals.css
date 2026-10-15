@@ -1,61 +1,108 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: #000000;
-  --color-foreground: #FAFAFA;
-  --color-surface: #0A0A0A;
-  --color-surface-raised: #121212;
-  --color-surface-elevated: #171717;
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-border-default: rgba(255, 255, 255, 0.12);
-  --color-border-strong: rgba(255, 255, 255, 0.16);
+  /* Neutral Gray scale: https://www.radix-ui.com/colors */
+  --color-background: #111111;
+  --color-foreground: #eeeeee;
+  --color-surface: #191919;
+  --color-surface-raised: #222222;
+  --color-surface-elevated: #2a2a2a;
+  --color-surface-selected: #313131;
+  --color-secondary-foreground: #d4d4d4;
+  --color-muted-foreground: #b4b4b4;
+  --color-border-subtle: #3a3a3a;
+  --color-border-default: #484848;
+  --color-border-strong: #606060;
+  --color-accent: #eeeeee;
+  --color-accent-foreground: #111111;
+  --shadow-panel: 0 2px 8px rgb(0 0 0 / 12%);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+@layer base {
+  html {
+    background: var(--color-background);
+    color-scheme: dark;
+    scroll-padding-top: 6rem;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    min-width: 0;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #525252 transparent;
+  }
+
+  :where(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+
+  button, summary, select { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  input, textarea, select { min-width: 0; }
+  select, option {
+    background-color: var(--color-surface-raised);
+    color: var(--color-foreground);
+  }
+  pre {
+    max-width: 100%;
+    overflow: auto;
+    tab-size: 2;
+  }
+  main { min-width: 0; }
+  ::selection {
+    background: #606060;
+    color: var(--color-foreground);
+  }
 }
 
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.app-dialog {
+  margin: auto;
+  max-height: calc(100dvh - 2rem);
+  overscroll-behavior: contain;
+  animation: dialog-enter 140ms ease-out;
 }
 
-*::-webkit-scrollbar-track {
-  background: transparent;
+.app-dialog::backdrop { background: rgb(0 0 0 / 60%); }
+
+.app-drawer {
+  width: min(23rem, calc(100% - 1rem));
+  height: 100dvh;
+  max-height: 100dvh;
+  max-width: none;
+  margin: 0 auto 0 0;
+  border-radius: 0;
+  border-width: 0 2px 0 0;
+  animation: drawer-enter 160ms ease-out;
 }
 
-*::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+.app-drawer[open] { display: flex; flex-direction: column; }
+
+@keyframes drawer-enter {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+@keyframes dialog-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-html {
-  background-color: #000000;
-}
-
-body {
-  background-color: #000000;
-  color: #FAFAFA;
-  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-::selection {
-  background: rgba(255, 255, 255, 0.2);
-  color: #FAFAFA;
-}
-
-/* Subtle grid pattern overlay */
-.grid-pattern {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 32px 32px;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

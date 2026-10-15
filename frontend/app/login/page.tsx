@@ -2,7 +2,6 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import { getSession } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +10,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
   CardDescription,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -23,55 +21,67 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [csrfToken, setCsrfToken] = useState("");
-  const [loadingProvider] = useState<string | null>(null);
-  const [show, setshow] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [show, setShow] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  useEffect(() => {
-    fetch(`/auth/csrf`, { credentials: "include" })
-      .then((res) => res.json())
-      .then((data) => setCsrfToken(data.csrfToken));
+  const visibleError = error ?? (searchParams.get("error") === "CredentialsSignin" ? "Invalid email or password." : null);
 
-    getSession().then((session) => {
-      if (session) {
-        router.replace("/workspace");
-      } else {
-        setIsLoading(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function initialize() {
+      try {
+        const session = await getSession();
+        if (cancelled) return;
+        if (session) {
+          router.replace("/workspace");
+          return;
+        }
+        const response = await fetch("/auth/csrf", { credentials: "include" });
+        if (!response.ok) throw new Error("Unable to connect to the sign-in service.");
+        const data = await response.json();
+        if (!cancelled) setCsrfToken(data.csrfToken);
+      } catch {
+        if (!cancelled) setError("Unable to connect. Please try signing in again.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    });
+    }
+    initialize();
+    return () => { cancelled = true; };
   }, [router]);
 
-  useEffect(() => {
-    const errorParam = searchParams.get("error");
-    if (errorParam === "CredentialsSignin") {
-      setError("Invalid email or password");
-    }
-  }, [searchParams]);
-
   async function handleSocialSignin(provider: string) {
-    const res = await fetch(`/auth/csrf`, { credentials: "include" });
-    const { csrfToken } = await res.json();
-
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = `/auth/signin/${provider}`;
-
-    const csrfInput = document.createElement("input");
-    csrfInput.type = "hidden";
-    csrfInput.name = "csrfToken";
-    csrfInput.value = csrfToken;
-    form.appendChild(csrfInput);
-
-    document.body.appendChild(form);
-    form.submit();
+    setLoadingProvider(provider);
+    setError("");
+    try {
+      const response = await fetch("/auth/csrf", { credentials: "include" });
+      if (!response.ok) throw new Error("Unable to start sign-in.");
+      const { csrfToken } = await response.json();
+      if (!csrfToken) throw new Error("Unable to start sign-in.");
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = `/auth/signin/${provider}`;
+      const csrfInput = document.createElement("input");
+      csrfInput.type = "hidden";
+      csrfInput.name = "csrfToken";
+      csrfInput.value = csrfToken;
+      form.appendChild(csrfInput);
+      document.body.appendChild(form);
+      form.submit();
+    } catch {
+      setError("Unable to start sign-in. Please try again.");
+      setLoadingProvider(null);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     const trimmedEmail = email.trim();
-    const trimmedPassword = password.trim();
+    const trimmedPassword = password;
 
     if (!trimmedEmail) {
       setError("Email is required.");
@@ -83,9 +93,19 @@ function LoginForm() {
       return;
     }
 
-    setError(null);
+    setError("");
+    setIsSubmitting(true);
 
     try {
+      let token = csrfToken;
+      if (!token) {
+        const response = await fetch("/auth/csrf", { credentials: "include" });
+        if (!response.ok) throw new Error("Unable to start sign-in.");
+        const data = await response.json();
+        token = data.csrfToken;
+        setCsrfToken(token);
+      }
+      if (!token) throw new Error("Unable to start sign-in.");
       const res = await fetch(`/auth/callback/credentials`, {
         method: "POST",
         credentials: "include",
@@ -96,7 +116,7 @@ function LoginForm() {
         body: new URLSearchParams({
           email: trimmedEmail,
           password: trimmedPassword,
-          csrfToken,
+          csrfToken: token,
           json: "true",
         }).toString(),
       });
@@ -126,39 +146,35 @@ function LoginForm() {
 
       setError("Invalid email or password");
     } catch {
-      setError("Invalid email or password");
+      setError("Unable to sign in. Check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+      <div role="status" aria-label="Loading sign in" className="min-h-dvh bg-background flex items-center justify-center">
+        <div
           className="flex flex-col items-center gap-3"
         >
           <Loader2 className="w-5 h-5 text-white animate-spin" />
-          <span className="text-sm text-zinc-400">Loading...</span>
-        </motion.div>
+          <span className="text-sm text-muted-foreground">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden selection:bg-white/20">
-      <div className="pointer-events-none fixed inset-0 grid-pattern" />
+    <main id="main-content" className="min-h-dvh bg-background flex flex-col items-center justify-center px-4 py-8 sm:py-12 relative selection:bg-white/20">
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
-        className="w-full max-w-[380px] relative z-10"
+      <div
+        className="w-full max-w-[420px] relative z-10"
       >
         <div className="flex items-center justify-center gap-2 mb-8">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-white flex items-center justify-center">
-              <Zap className="w-4 h-4 text-black" />
+          <Link href="/" aria-label="WebhookLab home" className="flex min-h-11 items-center gap-2 rounded-md">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white">
+              <Zap className="w-4 h-4 text-neutral-950" />
             </div>
             <span className="text-lg font-medium tracking-tight text-white">
               WebhookLab
@@ -166,15 +182,15 @@ function LoginForm() {
           </Link>
         </div>
 
-        <Card className="border-white/[0.1] bg-[#0A0A0A] rounded-xl shadow-2xl">
-          <CardHeader className="text-center pb-2 px-8 pt-8">
-            <CardTitle className="text-xl font-medium">Welcome Back</CardTitle>
-            <CardDescription className="text-zinc-400 mt-1">
+        <Card className="border-border-default bg-surface rounded-xl shadow-panel">
+          <CardHeader className="text-center pb-2 px-5 pt-6 sm:px-8 sm:pt-8">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+            <CardDescription className="text-muted-foreground mt-1">
               Sign in to your account
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="px-8 pb-8 pt-6">
+          <CardContent className="px-5 pb-6 pt-6 sm:px-8 sm:pb-8">
             <form
               action={`/auth/callback/credentials`}
               method="POST"
@@ -184,22 +200,23 @@ function LoginForm() {
               <input type="hidden" name="csrfToken" value={csrfToken} />
 
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs text-zinc-400">
+                <Label htmlFor="email" className="text-xs text-muted-foreground">
                   Email Address
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
+                    autoComplete="email"
                     type="email"
                     name="email"
                     id="email"
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
-                      if (error) setError(null);
+                      if (visibleError) setError("");
                     }}
                     placeholder="you@example.com"
-                    className="pl-9 bg-[#111] border-white/[0.08]"
+                    className="pl-9"
                     required
                   />
                 </div>
@@ -207,20 +224,21 @@ function LoginForm() {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs text-zinc-400">
+                  <Label htmlFor="password" className="text-xs text-muted-foreground">
                     Password
                   </Label>
                 </div>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
                     type={show ? "text" : "password"}
+                    autoComplete="current-password"
                     name="password"
                     id="password"
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
-                      if (error) setError(null);
+                      if (visibleError) setError("");
                     }}
                     placeholder="••••••••"
                     className="pl-9 pr-11"
@@ -229,35 +247,31 @@ function LoginForm() {
                   <button
                     type="button"
                     aria-label={show ? "Hide password" : "Show password"}
-                    onClick={() => setshow((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                    aria-pressed={show}
+                    onClick={() => setShow((prev) => !prev)}
+                    className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
                   >
                     {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="flex items-center gap-2 px-3 py-2 rounded border border-red-500/20 bg-red-500/10"
+                {visibleError && (
+                  <div
+                    role="alert" className="flex items-start gap-2 rounded-lg border border-red-400/25 bg-red-500/10 p-3"
                   >
-                    <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                    <span className="text-[13px] text-red-500">{error}</span>
-                  </motion.div>
+                    <AlertCircle className="w-3.5 h-3.5 text-red-300 shrink-0" />
+                    <span className="text-[13px] text-red-300">{visibleError}</span>
+                  </div>
                 )}
-              </AnimatePresence>
 
               <Button
                 type="submit"
                 variant="primary"
-                className="w-full mt-2"
-                disabled={isLoading || !email.trim() || !password.trim()}
+                className="mt-2 min-w-32"
+                disabled={isSubmitting || loadingProvider !== null || !email.trim() || !password}
               >
-                {isLoading ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
                     Signing in...
@@ -268,25 +282,25 @@ function LoginForm() {
               </Button>
             </form>
 
-            <div className="mt-5 text-center text-[13px] text-zinc-500">
+            <div className="mt-5 text-center text-[13px] text-muted-foreground">
               Don&apos;t have an account?{" "}
               <Link
                 href="/register"
-                className="text-white hover:underline transition-colors"
+                className="rounded-sm font-medium text-secondary-foreground hover:underline"
               >
                 Register
               </Link>
             </div>
 
             <div className="flex items-center gap-3 my-6">
-              <Separator className="flex-1 bg-white/[0.08]" />
-              <span className="text-[11px] text-zinc-500 uppercase tracking-wider">
+              <Separator className="flex-1 bg-border-subtle" />
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider">
                 or continue with
               </span>
-              <Separator className="flex-1 bg-white/[0.08]" />
+              <Separator className="flex-1 bg-border-subtle" />
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               {[
                 {
                   name: "google",
@@ -319,25 +333,28 @@ function LoginForm() {
                   ),
                 },
               ].map((provider) => (
-                <button
+                <Button
+                  type="button"
+                  variant="outline"
                   key={provider.name}
                   onClick={() => handleSocialSignin(provider.name)}
-                  disabled={loadingProvider !== null}
-                  className="flex items-center justify-center h-9 rounded border border-white/[0.1] bg-[#111] hover:bg-white/[0.1] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={provider.label}
+                  disabled={loadingProvider !== null || isSubmitting}
+                  className="gap-2 px-2 text-xs"
+                  aria-label={`Sign in with ${provider.label}`}
                 >
                   {loadingProvider === provider.name ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                   ) : (
                     provider.icon
                   )}
-                </button>
+                  <span>{provider.label}</span>
+                </Button>
               ))}
             </div>
           </CardContent>
         </Card>
-      </motion.div>
-    </div>
+      </div>
+    </main>
   );
 }
 
@@ -345,7 +362,7 @@ export default function Page() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-black flex items-center justify-center">
+        <div role="status" aria-label="Loading sign in" className="min-h-dvh bg-background flex items-center justify-center">
           <Loader2 className="w-5 h-5 text-white animate-spin" />
         </div>
       }

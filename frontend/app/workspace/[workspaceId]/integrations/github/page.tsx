@@ -1,20 +1,14 @@
-'use client';
-import { usePathname } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import {
-  Zap,
-  Loader2,
-  AlertCircle,
-  FolderGit2,
-  Lock,
-  Star,
-  GitFork,
-  GitBranch,
-  Clock,
-  ExternalLink,
-} from 'lucide-react';
-import { apiFetch } from '@/lib/api';
+"use client";
+
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { Loader2, AlertCircle, FolderGit2, Lock, Globe2, Star, GitFork, GitBranch, Clock, ExternalLink, CheckCircle2, XCircle, Link2, Unplug, Settings } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { AppHeader } from "@/components/app-header";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 
 type GithubRepo = {
   id?: number | string;
@@ -33,617 +27,313 @@ type GithubRepo = {
 type WorkspaceEndpoint = {
   id: string;
   name: string;
-  token: string;
-  workspaceId: string;
-  createdAt: string;
-  githubRepoId?: string;
-  githubhookId:number,
+  githubRepoId?: string | number;
+  githubhookId?: number | null;
   events?: string[];
 };
 
-const GITHUB_WEBHOOK_EVENTS = [
-  'push',
-  'pull_request',
-  'issues',
-  'issue_comment',
-  'pull_request_review',
-  'release',
-  'fork',
-  'watch',
-  'workflow_run',
-  'discussion',
-] as const;
+type GithubDelivery = {
+  id?: number | string;
+  deliveryId?: number | string;
+  event?: string;
+  type?: string;
+  name?: string;
+  status_code?: number;
+  statusCode?: number;
+  responseStatus?: number;
+  status?: string;
+  duration?: number;
+  durationMs?: number;
+  delivered_at?: string;
+  createdAt?: string;
+  created_at?: string;
+  timestamp?: string;
+  success?: boolean;
+  succeeded?: boolean;
+  ok?: boolean;
+  response?: { statusCode?: number; durationMs?: number; ok?: boolean };
+};
+
+type Delivery = {
+  id?: number | string;
+  event: string;
+  status: string | number;
+  durationMs: number | null;
+  createdAt: string | null;
+  success: boolean;
+};
+
+const GITHUB_WEBHOOK_EVENTS = ["push", "pull_request", "issues", "issue_comment", "pull_request_review", "release", "fork", "watch", "workflow_run", "discussion"] as const;
 
 export default function GithubIntegrationsPage() {
+  const { workspaceId } = useParams<{ workspaceId: string }>();
   const [repos, setRepos] = useState<GithubRepo[]>([]);
   const [workspaceEndpoints, setWorkspaceEndpoints] = useState<WorkspaceEndpoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [workspaceName, setworkspaceName] = useState<string>('')
+  const [error, setError] = useState("");
+  const [workspaceName, setWorkspaceName] = useState(workspaceId);
   const [selectedRepo, setSelectedRepo] = useState<GithubRepo | null>(null);
-  const [selectedEvents, setSelectedEvents] = useState<string[]>(['push', 'pull_request', 'issues']);
+  const [selectedEvents, setSelectedEvents] = useState<string[]>(["push", "pull_request", "issues"]);
   const [confirmingConnection, setConfirmingConnection] = useState(false);
   const [managementMode, setManagementMode] = useState(false);
-  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loadingDeliveries, setLoadingDeliveries] = useState(false);
-  const pathname = usePathname();
-  const workspaceId = pathname.split('/')[2] ?? '';
+  const [deliveryError, setDeliveryError] = useState("");
 
   const fetchWorkspaceEndpoints = useCallback(async () => {
-    if (!workspaceId) return;
-
-    try {
-      const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, {
-        method: 'GET',
-      });
-      setWorkspaceEndpoints((data) ? data.endpoints : []);
-      setworkspaceName((data) ? data.workspaceName : '');
-    } catch (err) {
-      console.error('Failed to load workspace endpoints', err);
-    }
+    const data = await apiFetch(`/webhook/api/workspaces/endpoints/${workspaceId}`, { method: "GET" });
+    setWorkspaceEndpoints(data?.endpoints ?? []);
+    setWorkspaceName(data?.workspaceName || workspaceId);
   }, [workspaceId]);
 
   const fetchGithubRepos = useCallback(async () => {
     try {
-      setLoading(true);
-      setError('');
-      const data = await apiFetch('/api/github_data', {
-        method: 'GET',
-      });
-      const repoList = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.repositories)
-          ? data.repositories
-          : [];
-
-      setRepos(repoList);
+      const [data] = await Promise.all([
+        apiFetch("/api/github_data", { method: "GET" }),
+        fetchWorkspaceEndpoints(),
+      ]);
+      setRepos(Array.isArray(data) ? data : Array.isArray(data?.repositories) ? data.repositories : []);
+      setError("");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Something went wrong while fetching GitHub repositories.'
-      );
+      setError(err instanceof Error ? err.message : "Unable to load GitHub repositories. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchWorkspaceEndpoints]);
 
   useEffect(() => {
-    void fetchGithubRepos();
-    void fetchWorkspaceEndpoints();
-  }, [fetchGithubRepos, fetchWorkspaceEndpoints]);
+    async function load() {
+      await fetchGithubRepos();
+    }
+    load();
+  }, [fetchGithubRepos]);
 
+  const getEndpointForRepo = (repo: GithubRepo) => workspaceEndpoints.find((endpoint) =>
+    endpoint.githubRepoId != null && String(endpoint.githubRepoId).trim() === String(repo.id) && endpoint.githubhookId != null
+  );
 
-  const isRepoConnected = (repo: GithubRepo) => {
-    return workspaceEndpoints.some(
-      (endpoint) =>
-        endpoint.githubRepoId != null &&
-        String(endpoint.githubRepoId).trim() === String(repo.id) &&
-        endpoint.githubhookId != null
-    );
-
-  };
-
-  const getEndpointForRepo = (repo: GithubRepo) => {
-    const getendpoint = workspaceEndpoints.find((endpoint) => endpoint.githubRepoId?.trim().toLowerCase() === String(repo.id));
-
-    return getendpoint
-
+  const closeDialog = () => {
+    if (confirmingConnection) return;
+    setSelectedRepo(null);
+    setManagementMode(false);
+    setConfirmDisconnect(false);
+    setActionError("");
   };
 
   const openConnectCard = (repo: GithubRepo) => {
     setSelectedRepo(repo);
-    setSelectedEvents(['push', 'pull_request', 'issues']);
-    setConfirmingConnection(false);
+    setSelectedEvents(["push", "pull_request", "issues"]);
     setManagementMode(false);
+    setConfirmDisconnect(false);
+    setActionError("");
   };
+
   const openManageCard = async (repo: GithubRepo) => {
     const endpoint = getEndpointForRepo(repo);
-    if (!endpoint) {
-      console.error('No endpoint found for the selected repository');
-      return;
-    }
-
+    if (!endpoint) return;
     setSelectedRepo(repo);
-    const events = endpoint.events ?? ['push', 'pull_request', 'issues'];
-    setSelectedEvents(events);
-    setConfirmingConnection(false);
+    setSelectedEvents(endpoint.events ?? ["push", "pull_request", "issues"]);
     setManagementMode(true);
+    setConfirmDisconnect(false);
+    setActionError("");
+    setDeliveryError("");
     setDeliveries([]);
     setLoadingDeliveries(true);
-
     try {
-      const getdeliveries = await apiFetch(
-        `/webhook/api/endpoint/${endpoint.id}/github/deliveries`,
-        { method: 'GET' }
-      );
-      const list = Array.isArray(getdeliveries)
-        ? getdeliveries
-        : Array.isArray(getdeliveries?.deliveries)
-          ? getdeliveries.deliveries
-          : [];
-
-      const mapped = list.map((d: any) => {
-        const id = d.id ?? d.deliveryId;
-        const event = d.event || d.type || d.name || 'unknown';
-
-        const rawStatusCode =
-          d.status_code ??
-          d.statusCode ??
-          d.responseStatus ??
-          d.response?.statusCode;
-
-        const statusNum = Number(rawStatusCode);
-
-        const durationMs =
-          d.duration ?? d.durationMs ?? d.response?.durationMs ?? null;
-
-        const createdAt =
-          d.delivered_at ??
-          d.createdAt ??
-          d.created_at ??
-          d.timestamp ??
-          null;
-
-        let success: boolean;
-
-        if (!Number.isNaN(statusNum)) {
-          success = statusNum >= 200 && statusNum < 400;
-        } else if (typeof d.status === 'string') {
-          const s = d.status.toLowerCase();
-          success = s === 'ok' || s === 'success';
-        } else {
-          success = Boolean(
-            d.success ?? d.succeeded ?? d.ok ?? d.response?.ok
-          );
-        }
-
+      const data = await apiFetch(`/webhook/api/endpoint/${endpoint.id}/github/deliveries`, { method: "GET" });
+      const list: GithubDelivery[] = Array.isArray(data) ? data : Array.isArray(data?.deliveries) ? data.deliveries : [];
+      setDeliveries(list.map((delivery) => {
+        const statusCode = delivery.status_code ?? delivery.statusCode ?? delivery.responseStatus ?? delivery.response?.statusCode;
         return {
-          id,
-          event,
-          status: !Number.isNaN(statusNum)
-            ? statusNum
-            : rawStatusCode ?? d.status ?? '-',
-          durationMs,
-          createdAt,
-          success,
+          id: delivery.id ?? delivery.deliveryId,
+          event: delivery.event || delivery.type || delivery.name || "Unknown event",
+          status: statusCode ?? delivery.status ?? "—",
+          // GitHub reports duration in seconds; alternate API fields use milliseconds.
+          durationMs: delivery.durationMs ?? delivery.response?.durationMs ?? (delivery.duration == null ? null : delivery.duration * 1000),
+          createdAt: delivery.delivered_at ?? delivery.createdAt ?? delivery.created_at ?? delivery.timestamp ?? null,
+          success: statusCode != null ? statusCode >= 200 && statusCode < 400 : ["ok", "success"].includes(delivery.status?.toLowerCase() ?? "") || Boolean(delivery.success ?? delivery.succeeded ?? delivery.ok ?? delivery.response?.ok),
         };
-      });
-
-      setDeliveries(mapped);
+      }));
     } catch (err) {
-      console.error('Failed to fetch deliveries', err);
+      setDeliveryError(err instanceof Error ? err.message : "Unable to load recent deliveries.");
     } finally {
       setLoadingDeliveries(false);
     }
   };
 
-  const toggleEvent = (eventName: string) => {
-    setSelectedEvents((current) =>
-      current.includes(eventName)
-        ? current.filter((event) => event !== eventName)
-        : [...current, eventName]
-    );
-  };
+  const toggleEvent = (eventName: string) => setSelectedEvents((current) => current.includes(eventName) ? current.filter((event) => event !== eventName) : [...current, eventName]);
 
-  const autocreatehook = async () => {
-    if (!selectedRepo?.full_name || !workspaceId || selectedEvents.length === 0) {
-      return;
-    }
-
-    const [owner, name] = selectedRepo.full_name.split('/');
-
-    if (!owner || !name) {
-      return;
-    }
-
+  const handleConnect = async () => {
+    if (confirmingConnection || !selectedRepo?.full_name || !workspaceId || selectedEvents.length === 0) return;
+    const [owner, name] = selectedRepo.full_name.split("/");
+    if (!owner || !name) return;
     try {
       setConfirmingConnection(true);
-      await apiFetch('/webhook/api/endpoint', {
-        method: 'POST',
-        body: JSON.stringify({
-          githubRepo: selectedRepo.full_name,
-          owner,
-          name,
-          githubRepoId: String(selectedRepo.id),
-          workspaceId,
-          events: selectedEvents,
-        }),
+      setActionError("");
+      await apiFetch("/webhook/api/endpoint", {
+        method: "POST",
+        body: JSON.stringify({ githubRepo: selectedRepo.full_name, owner, name, githubRepoId: String(selectedRepo.id), workspaceId, events: selectedEvents }),
       });
-
       setSelectedRepo(null);
-      await fetchWorkspaceEndpoints();
-    } catch (error) {
-      console.error('Failed to create webhook', error);
+      await fetchGithubRepos();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Unable to connect repository. Please try again.");
     } finally {
       setConfirmingConnection(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!selectedRepo) return;
+    if (confirmingConnection || !selectedRepo) return;
     const endpoint = getEndpointForRepo(selectedRepo);
-    if (!endpoint) {
-      setSelectedRepo(null);
-      setManagementMode(false);
-      return;
-    }
-
+    if (!endpoint) return;
     try {
-      const check = await apiFetch(`/webhook/api/endpoint`, {
-        method: 'DELETE',
-        body: JSON.stringify({ endpointId: endpoint.id, repo: selectedRepo?.full_name, message: "disconnect" })
+      setConfirmingConnection(true);
+      setActionError("");
+      const result = await apiFetch("/webhook/api/endpoint", {
+        method: "DELETE", body: JSON.stringify({ endpointId: endpoint.id, repo: selectedRepo.full_name, message: "disconnect" }),
       });
-      if (check.error) {
-        return console.error(check.error)
-      }
-    } catch (err) {
-      console.error('Failed to delete endpoint', err);
-    } finally {
-      setWorkspaceEndpoints((prev) => prev.filter((e) => e.id !== endpoint.id));
+      if (result.error) throw new Error(result.error);
       setSelectedRepo(null);
       setManagementMode(false);
-      void fetchWorkspaceEndpoints();
+      setConfirmDisconnect(false);
+      await fetchGithubRepos();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Unable to disconnect repository. Please try again.");
+    } finally {
+      setConfirmingConnection(false);
     }
   };
 
-  const handlesave = async () => {
-    const sendpatch = await apiFetch('/webhook/api/endpoint', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        repo: selectedRepo?.full_name,
-        githubRepoId: String(selectedRepo?.id),
-        events: selectedEvents,
-        endpointId: getEndpointForRepo(selectedRepo as GithubRepo)?.id
-      })
-    })
-    setSelectedRepo(null);
-    setManagementMode(false);
-    void fetchWorkspaceEndpoints();
+  const handleSave = async () => {
+    if (confirmingConnection || !selectedRepo || selectedEvents.length === 0) return;
+    const endpoint = getEndpointForRepo(selectedRepo);
+    if (!endpoint) return;
+    try {
+      setConfirmingConnection(true);
+      setActionError("");
+      await apiFetch("/webhook/api/endpoint", {
+        method: "PATCH", body: JSON.stringify({ repo: selectedRepo.full_name, githubRepoId: String(selectedRepo.id), events: selectedEvents, endpointId: endpoint.id }),
+      });
+      setSelectedRepo(null);
+      setManagementMode(false);
+      await fetchGithubRepos();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Unable to save webhook events. Please try again.");
+    } finally {
+      setConfirmingConnection(false);
+    }
   };
 
   const formatUpdated = (dateStr: string) => {
     const date = new Date(dateStr);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days === 0) return 'today';
-    if (days === 1) return 'yesterday';
-    if (days < 30) return `${days}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (Number.isNaN(date.getTime())) return "Unknown";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
-
-  const formatDuration = (ms: number | null) => {
-    if (ms == null) return '-';
-    const s = (Number(ms) / 1000);
-    if (s < 1) return `${s.toFixed(2)}s`;
-    return `${s.toFixed(2)}s`;
-  };
-
-  const formatTimeAgo = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    const d = new Date(dateStr);
-    const now = new Date();
-    const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
-    return d.toLocaleDateString();
+  const formatDuration = (ms: number | null) => ms == null ? "—" : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
+  const formatDeliveryTime = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   };
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden selection:bg-white/20">
-      <div className="pointer-events-none fixed inset-0 grid-pattern" />
-
-      {/* Header */}
-      <header className="relative z-20 border-b border-white/[0.08] bg-black/80 backdrop-blur-md">
-        <div className="max-w-full mx-auto px-6">
-          <div className="flex items-center h-14">
-            <Link href="/workspace" className="flex items-center gap-2 group">
-              <div className="w-7 h-7 rounded bg-white flex items-center justify-center">
-                <Zap className="w-4 h-4 text-black" />
-              </div>
-              <span className="text-base font-medium tracking-tight group-hover:text-zinc-300 transition-colors">
-                WebhookLab
-              </span>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="relative z-10 max-w-5xl mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-[22px] font-semibold text-white flex items-center gap-2.5">
-            <FolderGit2 className="w-5 h-5 text-zinc-400" />
-            GitHub Repositories
-          </h1>
-          <p className="text-[13px] text-zinc-400 mt-1.5">
-            Your connected GitHub repositories, ready to wire up to a webhook endpoint.
-          </p>
-        </div>
-
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-20 bg-[#0A0A0A] border border-white/[0.08] rounded-lg">
-            <Loader2 className="w-5 h-5 animate-spin text-zinc-400 mb-3" />
-            <p className="text-[13px] text-zinc-400">Loading repositories...</p>
-          </div>
-        )}
-
-        {!loading && error && (
-          <div className="flex items-start gap-3 p-5 bg-red-500/10 border border-red-500/20 rounded-lg">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+    <ProtectedRoute>
+      <div className="min-h-screen bg-background text-foreground">
+        <AppHeader breadcrumbs={[{ label: "Workspaces", href: "/workspace" }, { label: workspaceName, href: `/workspace/${workspaceId}` }, { label: "GitHub" }]} />
+        <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-[14px] font-medium text-red-400">Couldn&apos;t load repositories</p>
-              <p className="text-[13px] text-red-400/70 mt-1">{error}</p>
+              <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight sm:text-3xl"><FolderGit2 className="h-6 w-6 shrink-0 text-secondary-foreground" /> GitHub repositories</h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Connect a repository to receive its GitHub events in this workspace.</p>
             </div>
+            <Link href={`/workspace/${workspaceId}`} className={buttonVariants({ variant: "secondary", className: "shrink-0" })}><Link2 className="h-4 w-4" /> View endpoints</Link>
           </div>
-        )}
 
-        {!loading && !error && repos.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 bg-[#0A0A0A] border border-white/[0.08] rounded-lg">
-            <FolderGit2 className="w-8 h-8 text-zinc-600 mb-3" />
-            <p className="text-[14px] text-zinc-300">No GitHub repositories found for this account</p>
-          </div>
-        )}
-
-        {!loading && !error && repos.length > 0 && (
-          <div className="grid gap-3">
-            {repos.map((repo) => {
-              const repoName = repo.full_name || repo.name || 'Unnamed repository';
-              const description = repo.description || 'No description provided.';
-              const connected = isRepoConnected(repo);
-
-              return (
-                <article
-                  key={repo.id ?? repoName}
-                  className="bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-5 hover:border-white/[0.15] transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2.5">
-                    <a
-                      href={repo.html_url || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 text-[15px] font-medium text-white hover:text-zinc-300 transition-colors group"
-                    >
-                      {repoName}
-                      <ExternalLink className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
-                    </a>
-
-                    {repo.private ? (
-                      <span className="inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded text-[11px] font-medium bg-white/[0.05] border border-white/[0.08] text-zinc-300">
-                        <Lock className="w-3 h-3" />
-                        Private
-                      </span>
-                    ) : (<span className="inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded text-[11px] font-medium bg-white/[0.05] border border-white/[0.08] text-zinc-300">
-                      <Lock className="w-3 h-3" />
-                      public
-                    </span>)}
-                  </div>
-
-                  <p className="text-[13px] text-zinc-400 leading-relaxed mb-4">
-                    {description}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-4 text-[12px] text-zinc-500 mb-4">
-                    {repo.language && (
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-400" />
-                        {repo.language}
-                      </span>
-                    )}
-                    {typeof repo.stargazers_count === 'number' && (
-                      <span className="flex items-center gap-1.5">
-                        <Star className="w-3.5 h-3.5" />
-                        {repo.stargazers_count}
-                      </span>
-                    )}
-                    {typeof repo.forks_count === 'number' && (
-                      <span className="flex items-center gap-1.5">
-                        <GitFork className="w-3.5 h-3.5" />
-                        {repo.forks_count}
-                      </span>
-                    )}
-                    {repo.default_branch && (
-                      <span className="flex items-center gap-1.5">
-                        <GitBranch className="w-3.5 h-3.5" />
-                        {repo.default_branch}
-                      </span>
-                    )}
-                    {repo.updated_at && (
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" />
-                        Updated {formatUpdated(repo.updated_at)}
-                      </span>
-                    )}
-                  </div>
-
-                  {!connected && (
-                    <button
-                      onClick={() => {
-                        if (repo.full_name) {
-                          openConnectCard(repo);
-                        }
-                      }}
-                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded text-[13px] font-medium transition-all bg-white/[0.05] border border-white/[0.08] text-white hover:bg-white/[0.1] hover:border-white/[0.15]`}
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      Connect & Create Webhook
-                    </button>
-                  )}
-
-                  {connected && (
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded text-[13px] font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
-                        <Zap className="w-3.5 h-3.5" />
-                        Connected
-                      </span>
-                      <button
-                        onClick={() => openManageCard(repo)}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded text-[13px] font-medium bg-white/[0.03] border border-white/[0.08] text-white hover:bg-white/[0.06]"
-                      >
-                        Manage
-                      </button>
+          {loading && <div role="status" className="flex flex-col items-center rounded-xl border-2 border-border-default bg-surface shadow-panel px-5 py-16"><Loader2 className="mb-3 h-6 w-6 animate-spin text-secondary-foreground" /><p className="text-sm text-muted-foreground">Loading repositories…</p></div>}
+          {!loading && error && (
+            <div role="alert" className="rounded-xl border border-red-400/20 bg-surface p-5 sm:p-6">
+              <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" /><div className="min-w-0"><h2 className="text-base font-medium">Unable to load repositories</h2><p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{error}</p></div></div>
+              <div className="mt-5 flex flex-wrap gap-2"><Button variant="secondary" onClick={async () => { setLoading(true); await fetchGithubRepos(); }}>Try again</Button><Link href="/profile" className={buttonVariants({ variant: "outline" })}>Account settings</Link></div>
+            </div>
+          )}
+          {!loading && !error && repos.length === 0 && (
+            <div className="flex flex-col items-center rounded-xl border-2 border-dashed border-border-default bg-surface px-5 py-16 text-center"><FolderGit2 className="mb-4 h-8 w-8 text-muted-foreground" /><h2 className="text-lg font-medium">No repositories found</h2><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Repositories available to your connected GitHub account will appear here.</p><Button variant="secondary" className="mt-5" onClick={async () => { setLoading(true); await fetchGithubRepos(); }}>Refresh repositories</Button></div>
+          )}
+          {!loading && !error && repos.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {repos.map((repo) => {
+                const repoName = repo.full_name || repo.name || "Unnamed repository";
+                const connected = Boolean(getEndpointForRepo(repo));
+                return (
+                  <article key={repo.id ?? repoName} className="flex min-w-0 flex-col rounded-xl border-2 border-border-default bg-surface shadow-panel p-4 transition-colors hover:border-border-strong sm:p-5">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                      <h2 className="min-w-0 flex-1 text-base font-medium [overflow-wrap:anywhere]">{repo.html_url ? <a href={repo.html_url} target="_blank" rel="noopener noreferrer" className="text-foreground transition-colors hover:text-foreground">{repoName}<ExternalLink className="ml-2 inline h-3.5 w-3.5 text-muted-foreground" /><span className="sr-only"> (opens in a new tab)</span></a> : repoName}</h2>
+                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border-default bg-surface-raised px-2 py-1 text-xs text-secondary-foreground">{repo.private ? <Lock className="h-3 w-3" /> : <Globe2 className="h-3 w-3" />}{repo.private ? "Private" : "Public"}</span>
                     </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </main>
-
-      {selectedRepo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => { setSelectedRepo(null); setManagementMode(false); }}
-          />
-          <div className="relative w-full max-w-xl rounded-xl border border-white/[0.08] bg-[#0A0A0A] p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4 mb-5">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500 mb-2">
-                  GitHub webhook
-                </p>
-                <h2 className="text-xl font-semibold text-white">{selectedRepo.full_name || selectedRepo.name}</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setSelectedRepo(null); setManagementMode(false); }}
-                className="rounded border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[12px] text-zinc-300 hover:bg-white/[0.06]"
-              >
-                Cancel
-              </button>
+                    <p className="mb-4 break-words text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">{repo.description || "No description provided."}</p>
+                    <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                      {repo.language && <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-zinc-300" />{repo.language}</span>}
+                      {typeof repo.stargazers_count === "number" && <span className="flex items-center gap-1.5" aria-label={`${repo.stargazers_count} stars`}><Star className="h-3.5 w-3.5" />{repo.stargazers_count}</span>}
+                      {typeof repo.forks_count === "number" && <span className="flex items-center gap-1.5" aria-label={`${repo.forks_count} forks`}><GitFork className="h-3.5 w-3.5" />{repo.forks_count}</span>}
+                      {repo.default_branch && <span className="flex min-w-0 items-center gap-1.5"><GitBranch className="h-3.5 w-3.5 shrink-0" /><span className="break-all">{repo.default_branch}</span></span>}
+                      {repo.updated_at && <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />Updated {formatUpdated(repo.updated_at)}</span>}
+                    </div>
+                    <div className="mt-auto flex flex-wrap items-center gap-3 border-t border-border-subtle pt-4">
+                      {connected ? <><span className="inline-flex items-center gap-1.5 text-sm text-emerald-300"><CheckCircle2 className="h-4 w-4" /> Connected</span><Button variant="secondary" className="ml-auto" onClick={async () => { await openManageCard(repo); }}><Settings className="h-4 w-4" /> Manage</Button></> : <Button variant="primary" onClick={() => openConnectCard(repo)} disabled={!repo.full_name || repo.id == null} className="w-fit self-start"><Link2 className="h-4 w-4" /> Connect repository</Button>}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
+          )}
+        </main>
 
-            <div className="rounded-lg border border-white/[0.08] bg-[#111111] p-4 mb-5">
-              <p className="text-[13px] text-zinc-400 mb-2">Repository details</p>
-              <div className="space-y-2 text-[13px] text-zinc-300">
-                <div className="flex justify-between gap-4">
-                  <span className="text-zinc-500">Owner</span>
-                  <span className="font-medium text-white">
-                    {selectedRepo.full_name?.split('/')[0] || selectedRepo.name}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-zinc-500">Name</span>
-                  <span className="font-medium text-white">{selectedRepo.name}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-zinc-500">Visibility</span>
-                  <span className="font-medium text-white">
-                    {selectedRepo.private ? 'Private' : 'Public'}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-zinc-500">Workspace</span>
-                  <span className="font-medium text-white">{workspaceName}</span>
-                </div>
-              </div>
+        <Dialog open={selectedRepo !== null} onClose={closeDialog} title={confirmDisconnect ? "Disconnect repository?" : managementMode ? "Manage GitHub webhook" : "Connect repository"} description={selectedRepo?.full_name || selectedRepo?.name} className="max-w-2xl">
+          {selectedRepo && (confirmDisconnect ? (
+            <div className="space-y-5">
+              <p className="text-sm leading-6 text-muted-foreground">This will stop new GitHub events from being delivered to this webhook.</p>
+              {actionError && <p role="alert" className="break-words rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{actionError}</p>}
+              <div className="flex flex-wrap items-center justify-end gap-2"><Button variant="secondary" onClick={() => { setConfirmDisconnect(false); setActionError(""); }} disabled={confirmingConnection}>Keep connection</Button><Button variant="destructive" onClick={handleDisconnect} disabled={confirmingConnection}>{confirmingConnection ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}{confirmingConnection ? "Disconnecting…" : "Disconnect"}</Button></div>
             </div>
+          ) : (
+            <form className="space-y-6" onSubmit={async (event) => { event.preventDefault(); if (managementMode) await handleSave(); else await handleConnect(); }}>
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-2 rounded-lg border border-border-default bg-surface-raised p-4 text-sm">
+                <dt className="text-muted-foreground">Owner</dt><dd className="break-words text-right [overflow-wrap:anywhere]">{selectedRepo.full_name?.split("/")[0] || "—"}</dd>
+                <dt className="text-muted-foreground">Repository</dt><dd className="break-words text-right [overflow-wrap:anywhere]">{selectedRepo.name || selectedRepo.full_name?.split("/")[1]}</dd>
+                <dt className="text-muted-foreground">Visibility</dt><dd className="text-right">{selectedRepo.private ? "Private" : "Public"}</dd>
+                <dt className="text-muted-foreground">Workspace</dt><dd className="break-words text-right [overflow-wrap:anywhere]">{workspaceName}</dd>
+              </dl>
 
-            {managementMode && (
-              <div className="rounded-lg border border-white/[0.08] bg-[#0F0F0F] p-3 mb-5 max-h-44 overflow-y-auto text-[13px] text-zinc-300">
-                <p className="text-[13px] text-zinc-400 mb-2">Recent Deliveries</p>
-                {loadingDeliveries ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
-                    <span className="ml-2 text-zinc-500 text-[12px]">Loading deliveries…</span>
-                  </div>
-                ) : deliveries.length === 0 ? (
-                  <p className="text-[12px] text-zinc-500 py-2">No deliveries found.</p>
-                ) : (
-                  <div className="space-y-1">
-                    {deliveries.map((d) => (
-                      <div key={d.id ?? `${d.event}-${d.createdAt}`} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className={d.success ? 'text-emerald-400 w-4' : 'text-red-400 w-4'}>
-                            {d.success ? '✓' : '✗'}
-                          </span>
-                          <span className="w-40 truncate font-medium text-white">{d.event}</span>
-                        </div>
+              {managementMode && <section aria-labelledby="deliveries-title" className="rounded-lg border border-border-default bg-surface-raised p-4">
+                <h3 id="deliveries-title" className="mb-3 text-sm font-medium">Recent deliveries</h3>
+                {loadingDeliveries ? <p role="status" className="flex items-center gap-2 py-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading deliveries…</p> : deliveryError ? <p role="alert" className="break-words text-sm text-red-300">{deliveryError}</p> : deliveries.length === 0 ? <p className="text-sm text-muted-foreground">No deliveries yet.</p> : <div className="max-h-52 space-y-3 overflow-y-auto pr-1">
+                  {deliveries.map((delivery, index) => <div key={delivery.id ?? index} className="flex flex-col gap-2 border-t border-border-subtle pt-3 first:border-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-2">{delivery.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-label="Successful delivery" /> : <XCircle className="h-4 w-4 shrink-0 text-red-400" aria-label="Failed delivery" />}<span className="break-words text-sm [overflow-wrap:anywhere]">{delivery.event}</span></div>
+                    <dl className="flex flex-wrap gap-x-3 gap-y-1 pl-6 text-xs text-muted-foreground sm:shrink-0 sm:pl-0"><div><dt className="sr-only">Status</dt><dd>{delivery.status}</dd></div><div><dt className="sr-only">Duration</dt><dd>{formatDuration(delivery.durationMs)}</dd></div><div><dt className="sr-only">Delivered</dt><dd>{formatDeliveryTime(delivery.createdAt)}</dd></div></dl>
+                  </div>)}
+                </div>}
+              </section>}
 
-                        <div className="flex items-center gap-4 text-zinc-400">
-                          <span className="w-12 text-right">{d.status}</span>
-                          <span className="w-14 text-right">{formatDuration(d.durationMs)}</span>
-                          <span className="w-28 text-right text-zinc-500">{formatTimeAgo(d.createdAt)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <fieldset disabled={confirmingConnection}>
+                <legend className="text-sm font-medium">Webhook events</legend><p className="mb-3 mt-1 text-sm leading-6 text-muted-foreground">Choose at least one event to send to this endpoint.</p>
+                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+                  {GITHUB_WEBHOOK_EVENTS.map((eventName) => <label key={eventName} className={`flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors ${selectedEvents.includes(eventName) ? "border-border-strong bg-surface-raised text-foreground" : "border-border-default bg-surface-raised text-secondary-foreground hover:border-border-strong"}`}><input type="checkbox" checked={selectedEvents.includes(eventName)} onChange={() => toggleEvent(eventName)} className="h-4 w-4 shrink-0 accent-white" /><span className="break-words [overflow-wrap:anywhere]">{eventName}</span></label>)}
+                </div>
+              </fieldset>
+              {actionError && <p role="alert" className="break-words rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">{actionError}</p>}
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border-subtle pt-5">
+                {managementMode && <Button type="button" variant="destructive" className="sm:mr-auto" onClick={() => { setActionError(""); setConfirmDisconnect(true); }} disabled={confirmingConnection}><Unplug className="h-4 w-4" /> Disconnect</Button>}
+                <Button type="button" variant="secondary" onClick={closeDialog} disabled={confirmingConnection}>Cancel</Button>
+                <Button type="submit" variant="primary" disabled={selectedEvents.length === 0 || confirmingConnection}>{confirmingConnection && <Loader2 className="h-4 w-4 animate-spin" />}{confirmingConnection ? managementMode ? "Saving…" : "Connecting…" : managementMode ? "Save changes" : "Connect repository"}</Button>
               </div>
-            )}
-
-            <div className="mb-6">
-              <p className="text-[13px] text-zinc-400 mb-3">Choose the GitHub events to send to this webhook</p>
-              <div className="grid grid-cols-2 gap-2">
-                {GITHUB_WEBHOOK_EVENTS.map((eventName) => (
-                  <label
-                    key={eventName}
-                    className="flex cursor-pointer items-center gap-2 rounded border border-white/[0.08] bg-[#111111] px-3 py-2 text-[13px] text-zinc-200 transition hover:border-white/[0.16]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedEvents.includes(eventName)}
-                      onChange={() => toggleEvent(eventName)}
-                      className="h-4 w-4 accent-white"
-                    />
-                    <span>{eventName}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              {managementMode ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void handleDisconnect()}
-                    className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-[13px] font-medium text-red-400 hover:bg-red-500/20"
-                  >
-                    Disconnect
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedRepo(null); setManagementMode(false); }}
-                    className="rounded border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] font-medium text-zinc-300 hover:bg-white/[0.06]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    onClick={(e) => handlesave()}
-                    className="rounded bg-white px-3 py-2 text-[13px] font-medium text-black transition hover:bg-zinc-200"
-                  >
-                    Save
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRepo(null)}
-                    className="rounded border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] font-medium text-zinc-300 hover:bg-white/[0.06]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (selectedEvents.length > 0) {
-                        void autocreatehook();
-                      }
-                    }}
-                    disabled={selectedEvents.length === 0 || confirmingConnection}
-                    className="rounded bg-white px-3 py-2 text-[13px] font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {confirmingConnection ? 'Connecting...' : 'Confirm Connect'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+            </form>
+          ))}
+        </Dialog>
+      </div>
+    </ProtectedRoute>
   );
 }

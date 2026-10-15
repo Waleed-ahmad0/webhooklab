@@ -1,955 +1,355 @@
 "use client";
 
 import { apiFetch } from "@/lib/api";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Zap,
-  ChevronRight,
-  Play,
-  Edit3,
-  Trash2,
-  Loader2,
-  AlertCircle,
-  Clock,
-  ArrowRightCircle,
-  Search,
-  Filter,
-} from "lucide-react";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  PaginationEllipsis,
-} from "@/components/ui/pagination";
+import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Edit3, Filter, Inbox, Loader2, Menu, Play, Search, Settings, Trash2 } from "lucide-react";
 
 interface WebhookRequest {
   id: string;
   endpointId: string;
   method: string;
   headers: Record<string, string>;
-  body: Record<string, unknown> | null;
+  body: unknown;
   receivedAt: string;
 }
 
-const methodColors: Record<string, string> = {
-  GET: "border-green-500/20 bg-green-500/10 text-green-400",
-  POST: "border-blue-500/20 bg-blue-500/10 text-blue-400",
-  PUT: "border-yellow-500/20 bg-yellow-500/10 text-yellow-400",
-  PATCH: "border-orange-500/20 bg-orange-500/10 text-orange-400",
-  DELETE: "border-red-500/20 bg-red-500/10 text-red-400",
-  HEAD: "border-zinc-500/20 bg-zinc-500/10 text-zinc-300",
-  OPTIONS: "border-purple-500/20 bg-purple-500/10 text-purple-400",
-};
+interface ReplayResponse {
+  status: number;
+  statusText?: string;
+  duration: number;
+  responseHeaders?: Record<string, unknown>;
+  responseBody?: unknown;
+}
+
+type BodyViewMode = "pretty" | "raw" | "collapsible";
+const methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+const editorClassName = "w-full min-w-0 rounded-lg border-2 border-border-default bg-surface-raised p-3 font-mono text-base leading-6 text-foreground placeholder:text-muted-foreground sm:text-sm focus-visible:border-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:opacity-60";
+const selectClassName = "h-10 min-w-0 rounded-lg border-2 border-border-default bg-surface-raised px-3 text-base text-foreground sm:text-sm focus-visible:border-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20";
+
+function bodyString(body: unknown, pretty = true) {
+  if (body === undefined || body === null) return "";
+  return typeof body === "string" ? body : JSON.stringify(body, null, pretty ? 2 : undefined);
+}
+
+function MethodBadge({ method }: { method: string }) {
+  return <span className="inline-flex shrink-0 rounded-md border border-border-default bg-surface-raised px-2 py-1 font-mono text-xs font-semibold text-secondary-foreground">{method}</span>;
+}
+
+function HeaderList({ headers }: { headers: Record<string, unknown> }) {
+  const entries = Object.entries(headers);
+  if (!entries.length) return <p className="p-4 text-sm text-muted-foreground">No headers returned.</p>;
+  return (
+    <dl className="divide-y divide-border-subtle">
+      {entries.map(([key, value]) => (
+        <div key={key} className="grid min-w-0 gap-1 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-4">
+          <dt className="min-w-0 break-words font-mono text-xs leading-6 text-muted-foreground [overflow-wrap:anywhere]">{key}</dt>
+          <dd className="min-w-0 break-words font-mono text-sm leading-6 text-foreground [overflow-wrap:anywhere]">{typeof value === "string" ? value : JSON.stringify(value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function CollapsibleJSON({ data, depth = 0 }: { data: unknown; depth?: number }) {
+  if (data === null || typeof data !== "object") return <span className="break-words text-foreground [overflow-wrap:anywhere]">{JSON.stringify(data) ?? "null"}</span>;
+  const entries = Object.entries(data);
+  return (
+    <details open={depth === 0} className="min-w-0">
+      <summary className="w-fit cursor-pointer rounded py-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+        {Array.isArray(data) ? "Array" : "Object"} <span className="text-muted-foreground">({entries.length} {entries.length === 1 ? "item" : "items"})</span>
+      </summary>
+      <div className="ml-1 space-y-2 border-l border-border-subtle pl-3 sm:ml-2 sm:pl-4">
+        {entries.map(([key, value]) => <div key={key} className="min-w-0"><span className="break-words text-secondary-foreground [overflow-wrap:anywhere]">{Array.isArray(data) ? `[${key}]` : `${key}:`} </span><CollapsibleJSON data={value} depth={depth + 1} /></div>)}
+      </div>
+    </details>
+  );
+}
 
 export default function EndpointDetailPage() {
-  const params = useParams();
-  const workspaceId = params.workspaceId as string;
-  const endpointId = params.endpointId as string;
-  const [workspaceName, setWorkspaceName] = useState<string>('')
-  const [endpointName, setendpointName] = useState<string>('')
+  const { workspaceId, endpointId } = useParams<{ workspaceId: string; endpointId: string }>();
+  const router = useRouter();
+  const receivedRequestIds = useRef(new Set<string>());
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [endpointName, setEndpointName] = useState("");
   const [requests, setRequests] = useState<WebhookRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRequest, setSelectedRequest] = useState<WebhookRequest | null>(
-    null
-  );
+  const [selectedRequest, setSelectedRequest] = useState<WebhookRequest | null>(null);
   const [activeTab, setActiveTab] = useState<"headers" | "body">("body");
-  // const [headerSearch, setHeaderSearch] = useState<string>("");
-  // const [bodySearch, setBodySearch] = useState<string>("");
-  const [bodyViewMode, setBodyViewMode] = useState<"pretty" | "raw" | "form" | "collapsible">("pretty");
-  const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
+  const [bodyViewMode, setBodyViewMode] = useState<BodyViewMode>("pretty");
   const [targetUrl, setTargetUrl] = useState("");
   const [replaying, setReplaying] = useState(false);
   const [replayResult, setReplayResult] = useState<string | null>(null);
-  const [method, setMethod] = useState<string>("POST");
-  const [headersText, setHeadersText] = useState<string>("");
-  const [bodyText, setBodyText] = useState<string>("");
-  const [showReplayCard, setShowReplayCard] = useState<boolean>(false);
-  const [replayResponseData, setReplayResponseData] = useState<any | null>(null);
+  const [method, setMethod] = useState("POST");
+  const [headersText, setHeadersText] = useState("");
+  const [bodyText, setBodyText] = useState("");
+  const [showReplayCard, setShowReplayCard] = useState(false);
+  const [replayResponseData, setReplayResponseData] = useState<ReplayResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalRequests, setTotalRequests] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(totalRequests / 25));
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
   const [showMethodFilter, setShowMethodFilter] = useState(false);
-  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showRequestDrawer, setShowRequestDrawer] = useState(false);
+  const [settingsView, setSettingsView] = useState<"menu" | "rename" | "delete" | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const router = useRouter();
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
-  useEffect(() => {
-
-
-    const eventSource = new EventSource(
-      `/webhook/api/endpoint/${endpointId}/stream`,
-      { withCredentials: true }
-    );
-
-    eventSource.onmessage = (event) => {
-      const newRequest = JSON.parse(event.data);
-      setRequests((prev) => [newRequest, ...prev]);
-    };
-
-    return () => eventSource.close();
-  }, [endpointId]);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [searchQuery]);
-
-
-
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     try {
-      setLoading(true);
-      const data = await apiFetch(
-        `/webhook/api/endpoint/request/${endpointId}?page=${currentPage}&limit=25`,
-        { method: "GET" }
-      );
-      setWorkspaceName(data.workspaceName)
-      setendpointName(data.endpointName)
+      const data = await apiFetch(`/webhook/api/endpoint/request/${endpointId}?page=${currentPage}&limit=25`, { method: "GET" });
+      setWorkspaceName(data.workspaceName);
+      setEndpointName(data.endpointName);
       setRequests(data.requests);
-      setTotalPages(data.pagination?.totalPages || 1)
-      if (data.requests.length > 0 && !selectedRequest) {
-        setSelectedRequest(data.requests[0]);
-      }
+      setTotalRequests(data.pagination?.total ?? data.requests.length);
+      receivedRequestIds.current = new Set(data.requests.map((request: WebhookRequest) => request.id));
+      setSelectedRequest((previous) => data.requests.find((request: WebhookRequest) => request.id === previous?.id) || data.requests[0] || null);
       setError(null);
     } catch (err) {
-      setError("Failed to load requests");
+      setError("We couldn’t load the requests. Please try again.");
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (endpointId) fetchRequests();
-    // keep renameValue in sync when endpointName updates
   }, [endpointId, currentPage]);
 
   useEffect(() => {
-    setRenameValue(endpointName || "");
-  }, [endpointName]);
+    const loadRequests = async () => {
+      if (endpointId) await fetchRequests();
+    };
+    loadRequests();
+  }, [endpointId, fetchRequests]);
 
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
+  useEffect(() => {
+    const eventSource = new EventSource(`/webhook/api/endpoint/${endpointId}/stream`, { withCredentials: true });
+    eventSource.onmessage = (event) => {
+      try {
+        const newRequest: WebhookRequest = JSON.parse(event.data);
+        if (receivedRequestIds.current.has(newRequest.id)) return;
+        receivedRequestIds.current.add(newRequest.id);
+        setTotalRequests((previous) => previous + 1);
+        if (currentPage === 1) {
+          setRequests((previous) => [newRequest, ...previous.filter((request) => request.id !== newRequest.id)].slice(0, 25));
+          setSelectedRequest((previous) => previous || newRequest);
+        }
+      } catch (err) { console.error("Could not read the incoming request", err); }
+    };
+    return () => eventSource.close();
+  }, [endpointId, currentPage]);
+
+  useEffect(() => {
+    if (!copyStatus) return;
+    const timeout = setTimeout(() => setCopyStatus(null), 3000);
+    return () => clearTimeout(timeout);
+  }, [copyStatus]);
+
+  useEffect(() => {
+    if (!showRequestDrawer) return;
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeDrawerOnDesktop = () => { if (desktop.matches) setShowRequestDrawer(false); };
+    desktop.addEventListener("change", closeDrawerOnDesktop);
+    return () => desktop.removeEventListener("change", closeDrawerOnDesktop);
+  }, [showRequestDrawer]);
+
+  const formatTime = (date: string) => new Date(date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const formatDate = (date: string) => new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const copyToClipboard = async (text: string, label: string) => {
+    try { await navigator.clipboard.writeText(text); setCopyStatus(`${label} copied.`); }
+    catch { setCopyStatus("Copy failed. Select the text and copy it manually."); }
   };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  const openReplay = () => {
+    if (!selectedRequest) return;
+    setMethod(selectedRequest.method || "POST");
+    setHeadersText(Object.entries(selectedRequest.headers || {}).map(([key, value]) => `${key}: ${value}`).join("\n"));
+    setBodyText(bodyString(selectedRequest.body));
+    setReplayResult(null);
+    setReplayResponseData(null);
+    setBodyViewMode("pretty");
+    setShowReplayCard(true);
   };
-
-  const formatTimeAgo = (dateStr: string) => {
-    const now = Date.now();
-    const diff = now - new Date(dateStr).getTime();
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return `${seconds}s ago`;
-  };
-
-  const copyToClipboard = async (text: string) => {
+  const replayRequest = async () => {
+    if (!selectedRequest || !targetUrl.trim() || replaying) return;
     try {
-      await navigator.clipboard.writeText(text);
-    } catch (e) {
-      console.error('Copy failed', e);
-    }
-  };
-
-  const prettyBodyString = (body: any) => {
-    try {
-      return typeof body === 'string' ? body : JSON.stringify(body, null, 2);
-    } catch (e) {
-      return String(body || '');
-    }
-  }
-
-  // const toggleExpandAll = (expand: boolean) => {
-  //   // simple approach: clear or set a marker
-  //   if (!selectedRequest) return;
-  //   if (expand) {
-  //     setExpandedPaths({"/": true});
-  //   } else {
-  //     setExpandedPaths({});
-  //   }
-  // }
-
-  // Collapsible JSON viewer (simple)
-  const CollapsibleJSON = ({ data, path = '/' }: { data: any; path?: string }) => {
-    const isObject = data && typeof data === 'object' && !Array.isArray(data);
-    const isArray = Array.isArray(data);
-    const expanded = !!expandedPaths[path];
-    return (
-      <div className="text-[13px] font-mono text-zinc-200">
-        {(isObject || isArray) ? (
-          <div>
-            <button
-              onClick={() => setExpandedPaths(prev => ({ ...prev, [path]: !expanded }))}
-              className="text-[12px] text-zinc-400 mr-2"
-            >
-              {expanded ? '−' : '+'}
-            </button>
-            <span className="text-zinc-300">{isArray ? '[ ]' : '{ }'}</span>
-            {expanded && (
-              <div className="pl-5 mt-2">
-                {isArray ? (
-                  (data as any[]).map((item, i) => (
-                    <div key={i} className="mb-1">
-                      <div className="inline-block text-zinc-400">[{i}]</div>
-                      <CollapsibleJSON data={item} path={`${path}${i}/`} />
-                    </div>
-                  ))
-                ) : (
-                  Object.entries(data).map(([k, v]) => (
-                    <div key={k} className="mb-1">
-                      <div className="inline-block w-36 text-zinc-300">{k}:</div>
-                      <CollapsibleJSON data={v} path={`${path}${k}/`} />
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <span className="text-zinc-200">{String(data)}</span>
-        )}
-      </div>
-    )
-  }
-
-  const replayfetch = async () => {
-    if (!selectedRequest || !targetUrl.trim()) return;
+      const target = new URL(targetUrl.trim());
+      if (!["http:", "https:"].includes(target.protocol)) throw new Error("Invalid protocol");
+    } catch { setReplayResult("Enter a valid HTTP or HTTPS target URL."); return; }
     try {
       setReplaying(true);
       setReplayResult(null);
-
-      // parse headersText (lines like "Key: value") into object
-      const headers: Record<string, string> = {};
-      headersText.split("\n").map((l) => l.trim()).filter(Boolean).forEach((line) => {
-        const idx = line.indexOf(":");
-        if (idx > -1) {
-          const k = line.slice(0, idx).trim();
-          const v = line.slice(idx + 1).trim();
-          if (k) headers[k] = v;
-        }
-      });
-
-      // try parse bodyText as JSON
-      let body: any = null;
-      try {
-        body = bodyText ? JSON.parse(bodyText) : null;
-      } catch (e) {
-        // if not JSON, send as raw string
-        body = bodyText;
-      }
-
-      const res = await apiFetch(`/webhook/api/request/${selectedRequest.id}/replay`, {
-        method: "POST",
-        body: JSON.stringify({ targetUrl: targetUrl.trim(), method, headers, body }),
-      });
-
-      if (res?.networkError || res?.replayed === false) {
-        setReplayResponseData(null);
-        setReplayResult("Replay Failed\n\nCould not connect to the target server.");
-        return;
-      }
-
-      // store detailed response for UI
-      setReplayResponseData(res);
-      setReplayResult(null);
-    } catch (err) {
       setReplayResponseData(null);
-      setReplayResult("Replay Failed\n\nCould not connect to the target server.");
-      console.error(err);
-    } finally {
-      setReplaying(false);
-    }
+      const headers: Record<string, string> = {};
+      for (const line of headersText.split("\n").map((line) => line.trim()).filter(Boolean)) {
+        const separator = line.indexOf(":");
+        if (separator < 1) { setReplayResult("Use one header per line in the format Name: value."); return; }
+        headers[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+      }
+      let body: unknown = null;
+      try { body = bodyText ? JSON.parse(bodyText) : null; } catch { body = bodyText; }
+      const response = await apiFetch(`/webhook/api/request/${selectedRequest.id}/replay`, { method: "POST", body: JSON.stringify({ targetUrl: targetUrl.trim(), method, headers, body }) });
+      if (response?.networkError || response?.replayed === false) { setReplayResult("Replay failed. We couldn’t connect to the target server. Check the URL and try again."); return; }
+      setReplayResponseData(response);
+    } catch (err) { setReplayResult(err instanceof Error ? err.message.replace(/^API error:\s*/, "") : "Replay failed. Check the target URL and try again."); }
+    finally { setReplaying(false); }
   };
-
   const renameEndpoint = async () => {
-    if (!renameValue || !endpointId) return;
+    const name = renameValue.trim();
+    if (!name || !endpointId || renaming) return;
     try {
       setRenaming(true);
       setRenameError(null);
-      const res = await apiFetch(`/webhook/api/endpoint`, {
-        method: "PATCH",
-        body: JSON.stringify({ endpointName: renameValue, endpointId }),
-      });
-
-      if (res?.error) {
-        setRenameError(res.error || "Failed to rename");
-        return;
-      }
-
-      setShowRenameModal(false);
-      // refresh page to pick up new name
-      router.refresh();
-    } catch (err) {
-      console.error(err);
-      setRenameError("Failed to rename endpoint");
-    } finally {
-      setRenaming(false);
-    }
+      const response = await apiFetch("/webhook/api/endpoint", { method: "PATCH", body: JSON.stringify({ endpointName: name, endpointId }) });
+      if (response?.error) { setRenameError(response.error); return; }
+      setEndpointName(name);
+      setSettingsView(null);
+    } catch { setRenameError("We couldn’t rename the endpoint. Please try again."); }
+    finally { setRenaming(false); }
   };
-
   const deleteEndpoint = async () => {
-    if (!endpointId) return;
+    if (!endpointId || deleting) return;
     try {
       setDeleting(true);
       setDeleteError(null);
-      const res = await apiFetch(`/webhook/api/endpoint`, {
-        method: "DELETE",
-        body: JSON.stringify({ endpointId, message:'delete', endpointName   }),
-      });
-      if (res?.error) {
-        setDeleteError(res.error || "Failed to delete");
-        return;
-      }
-      // navigate back to workspace page
+      const response = await apiFetch("/webhook/api/endpoint", { method: "DELETE", body: JSON.stringify({ endpointId, message: "delete", endpointName }) });
+      if (response?.error) { setDeleteError(response.error); return; }
       router.replace(`/workspace/${workspaceId}`);
-    } catch (err) {
-      console.error(err);
-      setDeleteError("Failed to delete endpoint");
-    } finally {
-      setDeleting(false);
-    }
+    } catch { setDeleteError("We couldn’t delete the endpoint. Please try again."); }
+    finally { setDeleting(false); }
   };
-
-  // when selectedRequest changes, populate method/headers/body editors
-  useEffect(() => {
-    if (!selectedRequest) return;
-    setMethod(selectedRequest.method || "POST");
-    setHeadersText(
-      Object.entries(selectedRequest.headers || {}).map(([k, v]) => `${k}: ${v}`).join("\n")
-    );
-    try {
-      setBodyText(selectedRequest.body ? JSON.stringify(selectedRequest.body, null, 2) : "");
-    } catch (e) {
-      setBodyText("");
-    }
-    setReplayResult(null);
-    setShowReplayCard(false);
-    setReplayResponseData(null);
-  }, [selectedRequest]);
-
-  const filteredRequests = requests.filter(req => {
-    const matchesSearch = !debouncedSearch || req.id.toLowerCase().includes(debouncedSearch.toLowerCase());
-    const matchesMethod = selectedMethods.length === 0 || selectedMethods.includes(req.method.toUpperCase());
-    return matchesSearch && matchesMethod;
+  const filteredRequests = requests.filter((request) => {
+    const matchesSearch = !searchQuery.trim() || request.id.toLowerCase().includes(searchQuery.trim().toLowerCase());
+    return matchesSearch && (!selectedMethods.length || selectedMethods.includes(request.method.toUpperCase()));
   });
+  const hasFilters = Boolean(searchQuery.trim() || selectedMethods.length);
+  const requestContentType = Object.entries(selectedRequest?.headers || {}).find(([key]) => key.toLowerCase() === "content-type")?.[1];
+
+  const renderRequestList = (placement: "sidebar" | "drawer") => (
+    <>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">{placement === "sidebar" && <h2 className="text-sm font-semibold text-foreground">Requests</h2>}<span className="text-xs text-muted-foreground">{filteredRequests.length} {placement === "drawer" ? "requests " : ""}on this page</span></div>
+      <div className="shrink-0 space-y-3 border-b border-border-subtle p-4">
+        <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input aria-label="Search request IDs on this page" type="search" placeholder="Search request IDs…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="pl-9" /></div>
+        <Button variant="outline" className="w-full justify-between" aria-expanded={showMethodFilter} aria-controls={`${placement}-method-filters`} onClick={() => setShowMethodFilter(!showMethodFilter)}><span className="flex items-center gap-2"><Filter className="size-4" aria-hidden="true" />{selectedMethods.length ? `${selectedMethods.length} ${selectedMethods.length === 1 ? "method" : "methods"} selected` : "All methods"}</span><ChevronDown className={`size-4 transition-transform ${showMethodFilter ? "rotate-180" : ""}`} aria-hidden="true" /></Button>
+        {showMethodFilter && <fieldset id={`${placement}-method-filters`} className="grid grid-cols-2 gap-1 rounded-lg border border-border-default bg-surface-raised p-2"><legend className="sr-only">Filter by HTTP method</legend>{methods.map((item) => <label key={item} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-secondary-foreground hover:bg-surface-raised"><input type="checkbox" checked={selectedMethods.includes(item)} onChange={(event) => setSelectedMethods((previous) => event.target.checked ? [...previous, item] : previous.filter((value) => value !== item))} className="size-4 accent-white" /><span className="font-mono">{item}</span></label>)}</fieldset>}
+        {hasFilters && <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setSelectedMethods([]); }}>Clear filters</Button>}
+      </div>
+      <div className={placement === "drawer" ? "min-h-32 flex-1 overflow-y-auto overscroll-contain" : "max-h-[calc(100dvh-25rem)] min-h-64 overflow-y-auto overscroll-contain"} aria-busy={loading}>
+        {loading ? <div role="status" className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Loading requests…</div> : error ? <div className="space-y-3 p-5 text-center"><p role="alert" className="text-sm leading-6 text-red-300">{error}</p><Button variant="secondary" size="sm" onClick={async () => { setLoading(true); await fetchRequests(); }}>Try again</Button></div> : filteredRequests.length === 0 ? (
+          <div className="flex flex-col items-center p-6 text-center"><Inbox className="mb-3 size-7 text-muted-foreground" aria-hidden="true" /><p className="text-sm font-medium text-secondary-foreground">{hasFilters ? "No matching requests" : "Waiting for requests"}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{hasFilters ? "Try another request ID or clear your filters." : "Requests sent to this endpoint will appear here automatically."}</p></div>
+        ) : filteredRequests.map((request) => (
+          <button key={request.id} type="button" aria-pressed={selectedRequest?.id === request.id} onClick={() => { setSelectedRequest(request); setShowRequestDrawer(false); }} className={`block w-full min-w-0 border-b border-l-2 border-b-border-subtle px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70 ${selectedRequest?.id === request.id ? "border-l-accent bg-surface-selected" : "border-l-transparent hover:bg-surface-raised"}`}>
+            <span className="mb-2 flex items-center justify-between gap-2"><MethodBadge method={request.method} /><span className="text-xs text-muted-foreground">{formatTime(request.receivedAt)}</span></span>
+            <span className="block truncate font-mono text-sm text-secondary-foreground" title={request.id}>{request.id}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">{formatDate(request.receivedAt)}</span>
+          </button>
+        ))}
+      </div>
+      <nav aria-label="Request pagination" className="flex shrink-0 items-center justify-between gap-2 border-t border-border-subtle p-3">
+        <Button variant="outline" size="icon" aria-label="Previous page" disabled={loading || currentPage === 1} onClick={() => { setLoading(true); setCurrentPage((page) => Math.max(1, page - 1)); }}><ChevronLeft className="size-4" aria-hidden="true" /></Button>
+        <span className="text-center text-xs text-muted-foreground" aria-live="polite">Page <span className="font-medium text-secondary-foreground">{currentPage}</span> of {totalPages}</span>
+        <Button variant="outline" size="icon" aria-label="Next page" disabled={loading || currentPage >= totalPages} onClick={() => { setLoading(true); setCurrentPage((page) => Math.min(totalPages, page + 1)); }}><ChevronRight className="size-4" aria-hidden="true" /></Button>
+      </nav>
+    </>
+  );
 
   return (
     <ProtectedRoute>
-      <div className="h-screen bg-black text-white relative overflow-hidden flex flex-col selection:bg-white/20">
-        <div className="pointer-events-none fixed inset-0 grid-pattern" />
-
-        {/* Header */}
-        <header className="relative z-20 border-b border-white/[0.08] bg-black/80 backdrop-blur-md">
-          <div className="max-w-full mx-auto px-6">
-            <div className="flex items-center h-14">
-              <Link href="/workspace" className="flex items-center gap-2 group">
-                <div className="w-7 h-7 rounded bg-white flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-black" />
-                </div>
-                <span className="text-base font-medium tracking-tight group-hover:text-zinc-300 transition-colors">
-                  WebhookLab
-                </span>
-              </Link>
+      <div className="min-h-dvh bg-background text-foreground">
+        <AppHeader breadcrumbs={[{ label: "Workspaces", href: "/workspace" }, { label: workspaceName || "Workspace", href: `/workspace/${workspaceId}` }, { label: endpointName || "Endpoint" }]} />
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Endpoint inspector</p>
+              <h1 className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-3xl [overflow-wrap:anywhere]">{endpointName || "Endpoint"}</h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">Inspect incoming requests and replay them to test your integrations.</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button variant="secondary" className="lg:hidden" aria-haspopup="dialog" aria-expanded={showRequestDrawer} onClick={() => setShowRequestDrawer(true)}><Menu className="size-4" aria-hidden="true" />Requests<span className="rounded bg-surface-elevated px-1.5 py-0.5 text-xs tabular-nums">{totalRequests}</span></Button>
+              <Button variant="outline" size="icon" aria-label="Endpoint settings" title="Endpoint settings" aria-haspopup="dialog" aria-expanded={settingsView !== null} onClick={() => setSettingsView("menu")}><Settings className="size-4" aria-hidden="true" /></Button>
             </div>
           </div>
-        </header>
-
-        {/* Sub-header / Breadcrumbs */}
-        <div className="relative z-10 border-b border-white/[0.08] bg-[#050505]">
-          <div className="max-w-full mx-auto px-6 py-3">
-            <div className="flex items-center gap-2 text-[13px] text-zinc-400">
-              <Link
-                href="/workspace"
-                className="hover:text-white transition-colors"
-              >
-                Workspaces
-              </Link>
-              <ChevronRight className="w-3.5 h-3.5" />
-              <Link
-                href={`/workspace/${workspaceId}`}
-                className="hover:text-white transition-colors font-mono"
-              >
-                {workspaceName}
-              </Link>
-              <ChevronRight className="w-3.5 h-3.5" />
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-200 font-mono px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.03]">
-                  {endpointName}
-                </span>
-                <button
-                  onClick={() => { setRenameValue(endpointName || ""); setShowRenameModal(true); }}
-                  className="text-zinc-400 hover:text-zinc-200 p-1"
-                  aria-label="Rename endpoint"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                {/* delete moved into rename modal's danger zone */}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Interface */}
-        <div className="relative z-10 flex-1 flex overflow-hidden">
-          {/* Left Panel: Request List */}
-          <div className="w-[340px] shrink-0 border-r border-white/[0.08] bg-[#0A0A0A] flex flex-col">
-            <div className="px-4 py-3.5 border-b border-white/[0.08] bg-[#111] flex items-center justify-between">
-              <span className="text-[13px] font-medium text-zinc-300">
-                Requests
-              </span>
-              <span className="text-[12px] bg-white/[0.05] border border-white/[0.1] px-2 py-0.5 rounded text-zinc-300">
-                {filteredRequests.length} total
-              </span>
-            </div>
-
-            <div className="px-4 py-3 border-b border-white/[0.08] bg-[#0A0A0A] flex flex-col gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                <Input
-                  type="text"
-                  placeholder="Search requests by ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 h-8 bg-[#111] border-white/[0.08] text-[13px] text-zinc-200 placeholder:text-zinc-600 rounded"
-                />
-              </div>
-              <div className="relative">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full h-8 flex items-center justify-between bg-[#111] border border-white/[0.08] hover:bg-white/[0.05] text-zinc-300 text-[13px]"
-                  onClick={() => setShowMethodFilter(!showMethodFilter)}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5" />
-                    {selectedMethods.length === 0 ? "All Methods" : `${selectedMethods.length} Selected`}
-                  </span>
-                </Button>
-
-                {showMethodFilter && (
-                  <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-[#111] border border-white/[0.08] rounded-md shadow-lg z-20 flex flex-col gap-1">
-                    {["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => (
-                      <label key={method} className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/[0.05] rounded cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedMethods.includes(method)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedMethods([...selectedMethods, method]);
-                            } else {
-                              setSelectedMethods(selectedMethods.filter(m => m !== method));
-                            }
-                          }}
-                          className="rounded border-white/[0.2] bg-transparent text-white"
-                        />
-                        <span className={`text-[12px] font-mono font-bold ${methodColors[method].split(' ')[2]}`}>{method}</span>
-                      </label>
-                    ))}
+          <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
+            <aside aria-label="Incoming requests" className="hidden min-w-0 overflow-hidden rounded-xl border-2 border-border-default bg-surface shadow-panel lg:block">
+              {renderRequestList("sidebar")}
+            </aside>
+            <section aria-label="Request details" className="min-w-0 scroll-mt-6">
+              {selectedRequest ? (
+                <div className="min-w-0 overflow-hidden rounded-xl border-2 border-border-default bg-surface shadow-panel">
+                  <div className="flex min-w-0 flex-col gap-4 border-b border-border-subtle p-4 sm:p-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0"><div className="mb-3 flex items-center gap-2"><MethodBadge method={selectedRequest.method} /><h2 className="text-sm font-semibold">Request details</h2></div><p className="break-all font-mono text-sm leading-6 text-secondary-foreground">{selectedRequest.id}</p><p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs leading-5 text-muted-foreground"><Clock className="size-3.5" aria-hidden="true" />{formatDate(selectedRequest.receivedAt)} at {formatTime(selectedRequest.receivedAt)}</p></div>
+                    <Button variant="primary" onClick={openReplay} className="shrink-0 self-start"><Play className="size-4" aria-hidden="true" />Replay request</Button>
                   </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {loading ? (
-                <div className="p-4 flex justify-center">
-                  <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle p-3 sm:px-5">
+                    <div className="flex rounded-lg bg-background p-1" role="group" aria-label="Request content">{(["body", "headers"] as const).map((tab) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-10 rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${activeTab === tab ? "bg-surface-selected text-foreground ring-1 ring-inset ring-border-strong" : "text-muted-foreground hover:text-foreground"}`}>{tab === "body" ? "Body" : "Headers"}</button>)}</div>
+                    <Button variant="ghost" size="sm" onClick={async () => await copyToClipboard(activeTab === "body" ? bodyString(selectedRequest.body) : JSON.stringify(selectedRequest.headers, null, 2), activeTab === "body" ? "Request body" : "Request headers")}><Copy className="size-4" aria-hidden="true" />Copy</Button>
+                  </div>
+                  {activeTab === "body" ? <div>{requestContentType && <div className="break-words border-b border-border-subtle px-4 py-3 font-mono text-xs text-muted-foreground sm:px-5 [overflow-wrap:anywhere]">{requestContentType}</div>}<div className="max-h-[65dvh] overflow-auto p-4 sm:p-5">{selectedRequest.body === null || selectedRequest.body === undefined || selectedRequest.body === "" ? <p className="text-sm text-muted-foreground">This request has no body.</p> : <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground [overflow-wrap:anywhere]">{bodyString(selectedRequest.body)}</pre>}</div></div> : <HeaderList headers={selectedRequest.headers || {}} />}
                 </div>
-              ) : error ? (
-                <div className="p-4 text-center">
-                  <p className="text-[13px] text-red-400 mb-2">{error}</p>
-                  <Button variant="secondary" size="sm" onClick={fetchRequests}>
-                    Retry
-                  </Button>
+              ) : <div className="flex min-h-72 flex-col items-center justify-center rounded-xl border-2 border-dashed border-border-default bg-surface p-6 text-center"><AlertCircle className="mb-4 size-8 text-muted-foreground" aria-hidden="true" /><h2 className="text-base font-medium text-secondary-foreground">Your request details appear here</h2><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Select an incoming request to inspect its headers, body, and replay options.</p></div>}
+            </section>
+          </div>
+        </main>
+        <Dialog open={showRequestDrawer} onClose={() => setShowRequestDrawer(false)} title="Incoming requests" variant="drawer">
+          {renderRequestList("drawer")}
+        </Dialog>
+        <Dialog open={showReplayCard} onClose={() => { if (!replaying) setShowReplayCard(false); }} title="Replay request" description="Edit the request and send it to your target URL. The original request stays unchanged." className="max-w-6xl">
+          <form onSubmit={async (event) => { event.preventDefault(); await replayRequest(); }} className="min-w-0 space-y-5">
+            <fieldset disabled={replaying} className="grid min-w-0 gap-4 sm:grid-cols-[120px_minmax(0,1fr)] lg:grid-cols-[120px_minmax(0,1fr)_auto] lg:items-end">
+              <div className="min-w-0 space-y-2"><label htmlFor="replay-method" className="block text-sm font-medium text-secondary-foreground">Method</label><select id="replay-method" value={method} onChange={(event) => setMethod(event.target.value)} className={`${selectClassName} w-full`}>{methods.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+              <div className="min-w-0 space-y-2"><label htmlFor="replay-url" className="block text-sm font-medium text-secondary-foreground">Target URL</label><Input id="replay-url" type="url" required value={targetUrl} onChange={(event) => { setTargetUrl(event.target.value); setReplayResult(null); }} placeholder="https://api.example.com/webhook" className="h-10" /></div>
+              <Button variant="primary" type="submit" disabled={replaying || !targetUrl.trim()} className="w-fit justify-self-start sm:col-span-2 lg:col-span-1">{replaying ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Play className="size-4" aria-hidden="true" />}{replaying ? "Sending…" : "Send replay"}</Button>
+            </fieldset>
+            <fieldset disabled={replaying} className="grid min-w-0 gap-4 md:grid-cols-2">
+              <div className="min-w-0"><label htmlFor="replay-headers" className="mb-2 block text-sm font-medium text-secondary-foreground">Headers</label><textarea id="replay-headers" value={headersText} onChange={(event) => { setHeadersText(event.target.value); setReplayResult(null); }} rows={9} spellCheck={false} className={`${editorClassName} resize-y`} placeholder={"Content-Type: application/json\nX-Custom-Header: value"} /><p className="mt-1 text-xs leading-5 text-muted-foreground">One header per line, using Name: value.</p></div>
+              <div className="min-w-0"><label htmlFor="replay-body" className="mb-2 block text-sm font-medium text-secondary-foreground">Body</label><textarea id="replay-body" value={bodyText} onChange={(event) => { setBodyText(event.target.value); setReplayResult(null); }} rows={9} spellCheck={false} className={`${editorClassName} resize-y`} placeholder="Enter a JSON or text payload" /><p className="mt-1 text-xs leading-5 text-muted-foreground">JSON and plain text are supported.</p></div>
+            </fieldset>
+            {replayResult && <div role="alert" className="flex gap-2 rounded-lg border border-red-500/25 bg-red-500/10 p-4 text-sm leading-6 text-red-200"><AlertCircle className="mt-1 size-4 shrink-0" aria-hidden="true" /><p className="min-w-0 break-words [overflow-wrap:anywhere]">{replayResult}</p></div>}
+            {replaying && <p role="status" className="text-sm text-muted-foreground">Waiting for the target server to respond…</p>}
+            {replayResponseData && (
+              <section aria-label="Replay response" className="min-w-0 space-y-5 border-t border-border-subtle pt-5">
+                <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-base font-semibold text-foreground">Replay response</h3><div className="flex flex-wrap gap-3 text-sm"><span className={`rounded-md border px-2.5 py-1 font-mono ${replayResponseData.status >= 400 ? "border-red-500/25 bg-red-500/10 text-red-200" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"}`}>{replayResponseData.status} {replayResponseData.statusText}</span><span className="flex items-center gap-1.5 text-secondary-foreground"><Clock className="size-4 text-muted-foreground" aria-hidden="true" />{replayResponseData.duration} ms</span></div></div>
+                <div className="min-w-0 overflow-hidden rounded-lg border border-border-default bg-background">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle bg-surface-raised px-4 py-2.5"><h4 className="text-sm font-medium text-secondary-foreground">Response headers</h4><Button type="button" variant="ghost" size="sm" aria-label="Copy response headers" onClick={async () => await copyToClipboard(JSON.stringify(replayResponseData.responseHeaders || {}, null, 2), "Response headers")}><Copy className="size-4" aria-hidden="true" />Copy</Button></div>
+                  <div className="max-h-64 overflow-auto"><HeaderList headers={replayResponseData.responseHeaders || {}} /></div>
                 </div>
-              ) : filteredRequests.length === 0 ? (
-                <div className="p-8 text-center flex flex-col items-center">
-                  <Clock className="w-6 h-6 text-zinc-500 mb-3" />
-                  <p className="text-[14px] text-zinc-300">Waiting for requests...</p>
+                <div className="min-w-0 overflow-hidden rounded-lg border border-border-default bg-background">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle bg-surface-raised px-4 py-2.5"><h4 className="text-sm font-medium text-secondary-foreground">Response body</h4><div className="flex flex-wrap items-center gap-1"><select aria-label="Response body format" value={bodyViewMode} onChange={(event) => setBodyViewMode(event.target.value as BodyViewMode)} className={selectClassName}><option value="pretty">Pretty</option><option value="raw">Raw</option><option value="collapsible">Tree</option></select><Button type="button" variant="ghost" size="sm" aria-label="Copy response body" onClick={async () => await copyToClipboard(bodyString(replayResponseData.responseBody), "Response body")}><Copy className="size-4" aria-hidden="true" />Copy</Button></div></div>
+                  <div className="max-h-[50dvh] overflow-auto p-4 font-mono text-sm leading-7 text-foreground">{replayResponseData.responseBody === undefined || replayResponseData.responseBody === null || replayResponseData.responseBody === "" ? <p className="font-sans text-muted-foreground">The server returned an empty body.</p> : bodyViewMode === "collapsible" ? <CollapsibleJSON data={replayResponseData.responseBody} /> : <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{bodyString(replayResponseData.responseBody, bodyViewMode === "pretty")}</pre>}</div>
                 </div>
-              ) : (
-                filteredRequests.map((req) => (
-                  <button
-                    key={req.id}
-                    onClick={() => setSelectedRequest(req)}
-                    className={`w-full text-left px-4 py-3.5 border-b border-white/[0.04] transition-colors ${selectedRequest?.id === req.id
-                      ? "bg-white/[0.06] border-l-2 border-l-white"
-                      : "hover:bg-white/[0.02] border-l-2 border-l-transparent"
-                      }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider border ${methodColors[req.method.toUpperCase()] ||
-                          "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
-                          }`}
-                      >
-                        {req.method}
-                      </span>
-                      <span className="text-[12px] text-zinc-400">
-                        {formatTimeAgo(req.receivedAt)}
-                      </span>
-                    </div>
-                    <p className="text-[13px] text-zinc-300 font-mono truncate mb-1">
-                      {req.id}
-                    </p>
-                    <p className="text-[12px] text-zinc-500">
-                      {formatDate(req.receivedAt)} {formatTime(req.receivedAt)}
-                    </p>
-                  </button>
-                ))
-              )}
-            </div>
-
-            {/* Pagination */}
-            {!loading && (
-              <div className="px-3 py-3 border-t border-white/[0.08] bg-[#111] shrink-0">
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        onClick={() =>
-                          setCurrentPage((p) => Math.max(1, p - 1))
-
-                        }
-                        disabled={currentPage === 1}
-                        className={currentPage === 1 ? "opacity-40 pointer-events-none" : ""}
-                      />
-                    </PaginationItem>
-
-                    {/* First page */}
-                    <PaginationItem>
-                      <PaginationLink
-                        isActive={currentPage === 1}
-                        onClick={() => setCurrentPage(1)}
-                      >
-                        1
-                      </PaginationLink>
-                    </PaginationItem>
-
-                    {/* Ellipsis after first */}
-                    {currentPage > 3 && (
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    )}
-
-                    {/* Pages around current */}
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(
-                        (page) =>
-                          page !== 1 &&
-                          page !== totalPages &&
-                          Math.abs(page - currentPage) <= 1
-                      )
-                      .map((page) => (
-                        <PaginationItem key={page}>
-                          <PaginationLink
-                            isActive={currentPage === page}
-                            onClick={() => setCurrentPage(page)}
-                          >
-                            {page}
-                          </PaginationLink>
-                        </PaginationItem>
-                      ))}
-
-                    {/* Ellipsis before last */}
-                    {currentPage < totalPages - 2 && (
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    )}
-
-                    {/* Last page */}
-                    {totalPages > 1 && (
-                      <PaginationItem>
-                        <PaginationLink
-                          isActive={currentPage === totalPages}
-                          onClick={() => setCurrentPage(totalPages)}
-                        >
-                          {totalPages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    )}
-
-                    <PaginationItem>
-                      <PaginationNext
-                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className={currentPage === totalPages ? "opacity-40 pointer-events-none" : ""}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              </div>
+              </section>
             )}
-          </div>
-
-          {/* Right Panel: Request Detail */}
-          <div className="flex-1 flex flex-col bg-black overflow-hidden">
-            {selectedRequest ? (
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`inline-flex px-2.5 py-1 rounded text-[12px] font-bold uppercase tracking-wider border ${methodColors[selectedRequest.method.toUpperCase()] ||
-                        "border-zinc-500/20 bg-zinc-500/10 text-zinc-300"
-                        }`}
-                    >
-                      {selectedRequest.method}
-                    </span>
-                    <div>
-                      <p className="text-[14px] font-mono text-white">
-                        {selectedRequest.id}
-                      </p>
-                      <p className="text-[12px] text-zinc-400 mt-0.5">
-                        {formatDate(selectedRequest.receivedAt)}{" "}
-                        {formatTime(selectedRequest.receivedAt)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {!showReplayCard ? (
-                  <div className="mb-4">
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowReplayCard(true)}
-                      className="h-9 px-3"
-                    >
-                      <Play className="w-3.5 h-3.5 mr-2" />
-                      Replay
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div
-                      className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                      onClick={() => setShowReplayCard(false)}
-                    />
-                    <div
-                      className="relative w-[1100px] max-w-[95%] mx-4 bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-5 shadow-2xl max-h-[85vh] overflow-y-auto"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2">
-                          <ArrowRightCircle className="w-4 h-4 text-zinc-400" />
-                          <h3 className="text-[14px] font-medium text-zinc-200">Replay Request</h3>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => setShowReplayCard(false)}>
-                          Close
-                        </Button>
-                      </div>
-
-                      <div className="flex gap-2 items-center mb-3">
-                        <select
-                          value={method}
-                          onChange={(e) => setMethod(e.target.value)}
-                          className="bg-[#111] border border-white/[0.08] text-[13px] text-zinc-200 h-9 px-2 rounded w-28"
-                        >
-                          {[
-                            "GET",
-                            "POST",
-                            "PUT",
-                            "PATCH",
-                            "DELETE",
-                            "HEAD",
-                            "OPTIONS",
-                          ].map((m) => (
-                            <option key={m} value={m}>
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-
-                        <Input
-                          type="url"
-                          value={targetUrl}
-                          onChange={(e) => {
-                            setTargetUrl(e.target.value);
-                            setReplayResult(null);
-                          }}
-                          placeholder="https://api.example.com/webhook"
-                          className="flex-1 bg-[#111] border-white/[0.08] text-[14px] h-9"
-                        />
-
-                        <Button
-                          variant="primary"
-                          onClick={replayfetch}
-                          disabled={replaying || !targetUrl.trim()}
-                          className="h-9 shrink-0"
-                        >
-                          {replaying ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                          ) : (
-                            <Play className="w-3.5 h-3.5 mr-1.5" />
-                          )}
-                          Send Replay
-                        </Button>
-                      </div>
-
-                      <div className="mb-3 grid grid-cols-2 gap-3">
-                        <div>
-                          <div className="text-[13px] text-zinc-300 font-medium mb-2">Headers</div>
-                          <textarea
-                            value={headersText}
-                            onChange={(e) => { setHeadersText(e.target.value); setReplayResult(null); }}
-                            rows={14}
-                            className="w-full bg-[#0B0B0B] border border-white/[0.06] rounded p-3 text-[13px] font-mono text-zinc-200 resize-none"
-                            placeholder="Content-Type: application/json\nX-Custom-Header: abc"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="text-[13px] text-zinc-300 font-medium mb-2">Body</div>
-                          <textarea
-                            value={bodyText}
-                            onChange={(e) => { setBodyText(e.target.value); setReplayResult(null); }}
-                            rows={14}
-                            className="w-full bg-[#0B0B0B] border border-white/[0.06] rounded p-3 text-[13px] font-mono text-zinc-200 resize-none"
-                          />
-                        </div>
-                      </div>
-
-                      {replayResponseData ? (
-                        <div className="mt-4 border-t border-white/[0.06] pt-4">
-                          <h4 className="text-[14px] font-medium text-zinc-200 mb-2">Replay Result</h4>
-                          <div className="text-[13px] text-zinc-300 mb-2 grid grid-cols-2 gap-4">
-                            <div><span className="text-zinc-400">Status</span><div className="font-mono">{replayResponseData.status} {replayResponseData.statusText}</div></div>
-                            <div><span className="text-zinc-400">Duration</span><div className="font-mono">{replayResponseData.duration}ms</div></div>
-                          </div>
-
-                          <div className="mb-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-[13px] text-zinc-300 font-medium">Response Headers</div>
-                              <button onClick={() => copyToClipboard(JSON.stringify(replayResponseData.responseHeaders || {}, null, 2))} className="text-[12px] text-zinc-300 bg-white/[0.03] px-2 py-1 rounded">Copy</button>
-                            </div>
-                            <div className="bg-[#070707] border border-white/[0.03] rounded p-2 text-[13px] font-mono text-zinc-200">
-                              {Object.entries(replayResponseData.responseHeaders || {}).map(([k, v]) => (
-                                <div key={k} className="flex items-center justify-between gap-4 py-0.5">
-                                  <div className="text-zinc-400 w-56 truncate">{k as string}</div>
-                                  <div className="flex-1 text-zinc-200 truncate">{v as string}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-[13px] text-zinc-300 font-medium">Response Body</div>
-                              <div className="flex items-center gap-2">
-                                <select value={bodyViewMode} onChange={(e) => setBodyViewMode(e.target.value as any)} className="bg-[#111] border border-white/[0.06] text-[13px] rounded px-2 py-1">
-                                  <option value="pretty">Pretty</option>
-                                  <option value="raw">Raw</option>
-                                  <option value="collapsible">Collapsible</option>
-                                </select>
-                                <button onClick={() => copyToClipboard(JSON.stringify(replayResponseData.responseBody, null, 2))} className="text-[12px] text-zinc-300 bg-white/[0.03] px-2 py-1 rounded">Copy</button>
-                              </div>
-                            </div>
-
-                            <div className="bg-[#070707] border border-white/[0.03] rounded p-3 text-[13px] font-mono text-zinc-200 max-h-[40vh] overflow-auto">
-                              {bodyViewMode === 'collapsible' ? (
-                                <CollapsibleJSON data={replayResponseData.responseBody} />
-                              ) : bodyViewMode === 'raw' ? (
-                                <pre className="whitespace-pre-wrap">{typeof replayResponseData.responseBody === 'string' ? replayResponseData.responseBody : JSON.stringify(replayResponseData.responseBody)}</pre>
-                              ) : (
-                                <pre className="whitespace-pre-wrap">{prettyBodyString(replayResponseData.responseBody)}</pre>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : replayResult ? (
-                        <p
-                          className={`mt-2 text-[13px] font-medium whitespace-pre-line ${replayResult.includes("success")
-                            ? "text-green-400"
-                            : "text-red-400"
-                            }`}
-                        >
-                          {replayResult}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-1 mb-4 p-1 bg-white/[0.03] border border-white/[0.08] rounded w-fit">
-                  <button
-                    onClick={() => setActiveTab("body")}
-                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded transition-colors ${activeTab === "body"
-                      ? "bg-white/[0.1] text-white"
-                      : "text-zinc-400 hover:text-zinc-200"
-                      }`}
-                  >
-                    Body
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("headers")}
-                    className={`px-3.5 py-1.5 text-[13px] font-medium rounded transition-colors ${activeTab === "headers"
-                      ? "bg-white/[0.1] text-white"
-                      : "text-zinc-400 hover:text-zinc-200"
-                      }`}
-                  >
-                    Headers
-                  </button>
-                </div>
-
-                <div className="border border-white/[0.08] rounded-lg bg-[#0A0A0A] overflow-hidden">
-                  {activeTab === "body" && (
-                    <>
-                      <div className="px-4 py-2.5 border-b border-white/[0.08] bg-[#111] flex justify-between items-center">
-                        <span className="text-[12px] text-zinc-300 font-medium uppercase tracking-wider">
-                          Payload
-                        </span>
-                        <span className="text-[12px] text-zinc-400 font-mono">
-                          application/json
-                        </span>
-                      </div>
-                      <div className="p-4 overflow-x-auto">
-                        <pre className="text-[14px] font-mono text-zinc-200 leading-relaxed">
-                          {selectedRequest.body ? (
-                            JSON.stringify(selectedRequest.body, null, 2)
-                          ) : (
-                            <span className="text-zinc-500 italic">
-                              No body content
-                            </span>
-                          )}
-                        </pre>
-                      </div>
-                    </>
-                  )}
-
-                  {activeTab === "headers" && (
-                    <>
-                      <div className="px-4 py-2.5 border-b border-white/[0.08] bg-[#111]">
-                        <span className="text-[12px] text-zinc-300 font-medium uppercase tracking-wider">
-                          Request Headers
-                        </span>
-                      </div>
-                      <div className="divide-y divide-white/[0.04]">
-                        {Object.entries(selectedRequest.headers).map(
-                          ([key, value]) => (
-                            <div key={key} className="px-4 py-3 flex gap-4">
-                              <span className="text-[13px] font-mono text-zinc-300 w-48 shrink-0 truncate">
-                                {key}
-                              </span>
-                              <span className="text-[13px] font-mono text-zinc-100 truncate">
-                                {value}
-                              </span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-zinc-400">
-                <AlertCircle className="w-8 h-8 mb-3 opacity-30" />
-                <p className="text-[14px]">Select a request to view details</p>
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Rename Modal */}
-        {showRenameModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-black/60"
-              onClick={() => setShowRenameModal(false)}
-            />
-            <div className="relative w-[420px] bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[14px] font-medium text-zinc-200">Rename Endpoint</h3>
-                <Button variant="ghost" size="sm" onClick={() => setShowRenameModal(false)}>Close</Button>
-              </div>
-
-              <div className="mb-3">
-                <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} placeholder="Endpoint name" />
-                {renameError && <p className="text-red-400 text-[13px] mt-2">{renameError}</p>}
-              </div>
-
-              <div className="mb-4 border border-red-600/30 bg-red-600/5 p-3 rounded">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[13px] font-medium text-red-400">Danger Zone</div>
-                    <p className="text-[13px] text-zinc-300">Deleting this endpoint is permanent and cannot be undone.</p>
-                  </div>
-                  <div>
-                    <Button variant="destructive" onClick={() => { setShowRenameModal(false); setShowDeleteModal(true); }} disabled={deleting}>
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="secondary" onClick={() => setShowRenameModal(false)}>Cancel</Button>
-                <Button variant="primary" onClick={renameEndpoint} disabled={renaming || !renameValue}>
-                  {renaming ? "Saving..." : "Save"}
-                </Button>
-              </div>
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle bg-surface pt-4">
+              <p role="status" className="text-sm text-secondary-foreground">{copyStatus}</p>
+              <Button type="button" variant="secondary" onClick={() => setShowReplayCard(false)} disabled={replaying} className="ml-auto">Close replay</Button>
             </div>
-          </div>
-        )}
-        {/* Delete confirmation Modal */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div
-              className="absolute inset-0 bg-black/60"
-              onClick={() => setShowDeleteModal(false)}
-            />
-            <div className="relative w-[420px] bg-[#0A0A0A] border border-white/[0.08] rounded-lg p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[14px] font-medium text-zinc-200">Delete Endpoint</h3>
-                <Button variant="ghost" size="sm" onClick={() => setShowDeleteModal(false)}>Close</Button>
-              </div>
-
-              <p className="text-zinc-300 mb-4">Are you sure you want to delete this endpoint? This action cannot be undone.</p>
-              {deleteError && <p className="text-red-400 text-[13px] mb-2">{deleteError}</p>}
-
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
-                <Button variant="destructive" onClick={deleteEndpoint} disabled={deleting}>
-                  {deleting ? "Deleting..." : "Delete"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+          </form>
+        </Dialog>
+        <Dialog open={settingsView !== null} onClose={() => { if (!renaming && !deleting) setSettingsView(null); }} title={settingsView === "rename" ? "Rename endpoint" : settingsView === "delete" ? "Delete endpoint?" : "Endpoint settings"}>
+          {settingsView === "menu" && <div className="space-y-2">
+            <Button variant="ghost" autoFocus className="w-full justify-start text-foreground" onClick={() => { setRenameValue(endpointName); setRenameError(null); setSettingsView("rename"); }}><Edit3 className="size-4" aria-hidden="true" />Rename endpoint<ChevronRight className="ml-auto size-4 text-muted-foreground" aria-hidden="true" /></Button>
+            <Button variant="ghost" className="w-full justify-start text-red-300 hover:bg-red-500/10 hover:text-red-200" onClick={() => { setDeleteError(null); setSettingsView("delete"); }}><Trash2 className="size-4" aria-hidden="true" />Delete endpoint<ChevronRight className="ml-auto size-4" aria-hidden="true" /></Button>
+          </div>}
+          {settingsView === "rename" && <form onSubmit={async (event) => { event.preventDefault(); await renameEndpoint(); }} className="space-y-5">
+            <div className="space-y-2"><label htmlFor="rename-endpoint" className="block text-sm font-medium">Endpoint name</label><Input id="rename-endpoint" value={renameValue} onChange={(event) => setRenameValue(event.target.value)} disabled={renaming} required autoFocus /></div>
+            {renameError && <p role="alert" className="text-sm text-red-300">{renameError}</p>}
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border-subtle pt-4"><Button type="button" variant="secondary" onClick={() => setSettingsView("menu")} disabled={renaming}>Cancel</Button><Button type="submit" variant="primary" disabled={renaming || !renameValue.trim() || renameValue.trim() === endpointName}>{renaming && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}{renaming ? "Saving…" : "Save changes"}</Button></div>
+          </form>}
+          {settingsView === "delete" && <div className="space-y-5">
+            <p className="text-sm leading-6 text-secondary-foreground">Permanently delete <strong className="break-words text-foreground [overflow-wrap:anywhere]">{endpointName || "this endpoint"}</strong> and its requests? This endpoint will no longer receive webhooks. This action cannot be undone.</p>
+            {deleteError && <p role="alert" className="text-sm text-red-300">{deleteError}</p>}
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border-subtle pt-4"><Button variant="secondary" autoFocus onClick={() => setSettingsView("menu")} disabled={deleting}>Cancel</Button><Button variant="destructive" onClick={deleteEndpoint} disabled={deleting}>{deleting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Trash2 className="size-4" aria-hidden="true" />}{deleting ? "Deleting…" : "Delete endpoint"}</Button></div>
+          </div>}
+        </Dialog>
+        {copyStatus && !showReplayCard && <div role="status" className="fixed bottom-4 left-4 right-4 z-[70] mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-2 rounded-lg border border-border-default bg-surface-raised px-4 py-3 text-sm text-foreground shadow-xl">{copyStatus.includes("failed") ? <AlertCircle className="size-4 shrink-0 text-red-300" aria-hidden="true" /> : <Check className="size-4 shrink-0 text-emerald-300" aria-hidden="true" />}{copyStatus}</div>}
       </div>
     </ProtectedRoute>
   );

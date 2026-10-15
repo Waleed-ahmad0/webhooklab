@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "WebhookLab — Capture, Inspect & Route Webhooks in Real-Time",
   description:
-    "WebhookLab is a professional developer toolkit for capturing, inspecting, debugging, and forwarding webhook payloads. Real-time streaming, team workspaces, and local forwarding — built for production workflows.",
+    "Capture, inspect, and replay webhook payloads with WebhookLab. Organize endpoints in workspaces, view live requests, and debug your integrations.",
   keywords: [
     "webhook",
     "webhook testing",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "WebhookLab — Capture, Inspect & Route Webhooks in Real-Time",
     description:
-      "The professional developer toolkit for capturing, inspecting, and routing webhooks. Real-time streaming, team workspaces, and local forwarding.",
+      "Capture, inspect, and replay webhooks with live request streaming, organized workspaces, and GitHub integrations.",
     type: "website",
     siteName: "WebhookLab",
   },
@@ -49,7 +49,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#09090B] text-white">
+      <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
       </body>
     </html>

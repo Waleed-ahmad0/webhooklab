@@ -160,8 +160,6 @@ export async function deleteWorkspaceFunc(req: Request, res: Response) {
             }
         });
 
-        console.log(successfulGitHubIds)
-
         return res.status(502).json({
             success: false,
             message: "Some GitHub webhooks could not be deleted. Please try again.",
@@ -196,6 +194,5 @@ export async function deleteWorkspaceFunc(req: Request, res: Response) {
 //     }
 //     const endpoints = getworkspace.endpoints
 //     const github_endpoints = endpoints.filter(e => e.githubRepoId)
-//     console.log('getworkspace', getworkspace, 'github', github_endpoints)
 
 // }
