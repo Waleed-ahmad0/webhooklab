@@ -10,15 +10,16 @@ import { cn } from "@/lib/utils";
 interface AppHeaderProps {
   breadcrumbs?: { label: string; href?: string }[];
   actions?: ReactNode;
+  compact?: boolean;
 }
 
-export function AppHeader({ breadcrumbs = [], actions }: AppHeaderProps) {
+export function AppHeader({ breadcrumbs = [], actions, compact = false }: AppHeaderProps) {
   const pathname = usePathname();
 
   return (
     <header className="relative z-20 shrink-0 border-b-2 border-border-subtle bg-navigation">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-3 py-3">
+        <div className={cn("flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-3 py-3", compact && "lg:min-h-12 lg:py-1")}>
           <Link href="/" aria-label="WebhookLab home" className="flex shrink-0 items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-foreground">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white">
               <Zap className="h-4 w-4 text-neutral-950" aria-hidden="true" />
@@ -26,11 +27,11 @@ export function AppHeader({ breadcrumbs = [], actions }: AppHeaderProps) {
             WebhookLab
           </Link>
           <nav aria-label="Main navigation" className="ml-auto flex items-center gap-1 sm:gap-2">
-            <Link href="/workspace" aria-label="Workspaces" aria-current={pathname === "/workspace" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", pathname.startsWith("/workspace") && "bg-surface-raised text-foreground ring-1 ring-inset ring-border-default")}>
+            <Link href="/workspace" aria-label="Workspaces" aria-current={pathname === "/workspace" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", compact && "lg:h-8", pathname.startsWith("/workspace") && "bg-surface-raised text-foreground ring-1 ring-inset ring-border-default")}>
               <FolderOpen className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Workspaces</span>
             </Link>
-            <Link href="/profile" aria-label="Profile" aria-current={pathname === "/profile" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", pathname === "/profile" && "bg-surface-raised text-foreground ring-1 ring-inset ring-border-default")}>
+            <Link href="/profile" aria-label="Profile" aria-current={pathname === "/profile" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", compact && "lg:h-8", pathname === "/profile" && "bg-surface-raised text-foreground ring-1 ring-inset ring-border-default")}>
               <User className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Profile</span>
             </Link>
@@ -38,7 +39,7 @@ export function AppHeader({ breadcrumbs = [], actions }: AppHeaderProps) {
           {actions && <div className="flex w-full flex-wrap items-center gap-2 border-t border-border-subtle pt-3 sm:w-auto sm:border-0 sm:pt-0">{actions}</div>}
         </div>
         {breadcrumbs.length > 0 && (
-          <nav aria-label="Breadcrumb" className="border-t border-border-subtle py-3">
+          <nav aria-label="Breadcrumb" className={cn("border-t border-border-subtle py-3", compact && "lg:py-1")}>
             <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-6 text-muted-foreground">
               {breadcrumbs.map((item, index) => (
                 <li key={`${item.href ?? item.label}-${index}`} className="flex min-w-0 items-center gap-2">

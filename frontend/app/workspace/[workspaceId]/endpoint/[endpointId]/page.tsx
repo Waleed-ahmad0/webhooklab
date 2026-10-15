@@ -8,7 +8,7 @@ import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Edit3, Filter, Inbox, Loader2, Menu, Play, Search, Settings, Trash2 } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Clock, Copy, Edit3, Filter, Inbox, Loader2, Menu, Play, Search, Settings, Trash2 } from "lucide-react";
 
 interface WebhookRequest {
   id: string;
@@ -235,66 +235,70 @@ export default function EndpointDetailPage() {
 
   const renderRequestList = (placement: "sidebar" | "drawer") => (
     <>
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">{placement === "sidebar" && <h2 className="text-sm font-semibold text-foreground">Requests</h2>}<span className="text-xs text-muted-foreground">{filteredRequests.length} {placement === "drawer" ? "requests " : ""}on this page</span></div>
-      <div className="shrink-0 space-y-3 border-b border-border-subtle p-4">
-        <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input aria-label="Search request IDs on this page" type="search" placeholder="Search request IDs…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="pl-9" /></div>
-        <Button variant="outline" className="w-full justify-between" aria-expanded={showMethodFilter} aria-controls={`${placement}-method-filters`} onClick={() => setShowMethodFilter(!showMethodFilter)}><span className="flex items-center gap-2"><Filter className="size-4" aria-hidden="true" />{selectedMethods.length ? `${selectedMethods.length} ${selectedMethods.length === 1 ? "method" : "methods"} selected` : "All methods"}</span><ChevronDown className={`size-4 transition-transform ${showMethodFilter ? "rotate-180" : ""}`} aria-hidden="true" /></Button>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-subtle px-3 py-2">{placement === "sidebar" && <h2 className="text-sm font-semibold text-foreground">Requests</h2>}<span className="text-xs text-muted-foreground">{filteredRequests.length} {placement === "drawer" ? "requests " : ""}on this page</span></div>
+      <div className="max-h-[50%] min-h-0 shrink-0 space-y-2 overflow-y-auto overscroll-contain border-b border-border-subtle p-2">
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input aria-label="Search request IDs on this page" type="search" placeholder="Search IDs…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 pl-8 lg:h-8 lg:py-1" /></div>
+          <Button variant="outline" size="sm" className="h-10 gap-1.5 px-2 lg:h-8" aria-label={selectedMethods.length ? `Filter by HTTP method (${selectedMethods.length} selected)` : "Filter by HTTP method"} aria-expanded={showMethodFilter} aria-controls={`${placement}-method-filters`} onClick={() => setShowMethodFilter(!showMethodFilter)}><Filter className="size-4" aria-hidden="true" />Filters{selectedMethods.length > 0 && <span className="tabular-nums">({selectedMethods.length})</span>}</Button>
+        </div>
         {showMethodFilter && <fieldset id={`${placement}-method-filters`} className="grid grid-cols-2 gap-1 rounded-lg border border-border-default bg-surface-raised p-2"><legend className="sr-only">Filter by HTTP method</legend>{methods.map((item) => <label key={item} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-xs text-secondary-foreground hover:bg-surface-raised"><input type="checkbox" checked={selectedMethods.includes(item)} onChange={(event) => setSelectedMethods((previous) => event.target.checked ? [...previous, item] : previous.filter((value) => value !== item))} className="size-4 accent-white" /><span className="font-mono">{item}</span></label>)}</fieldset>}
         {hasFilters && <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setSelectedMethods([]); }}>Clear filters</Button>}
       </div>
-      <div className={placement === "drawer" ? "min-h-32 flex-1 overflow-y-auto overscroll-contain" : "max-h-[calc(100dvh-25rem)] min-h-64 overflow-y-auto overscroll-contain"} aria-busy={loading}>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" role="region" aria-label="Request list" tabIndex={0} aria-busy={loading}>
         {loading ? <div role="status" className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden="true" />Loading requests…</div> : error ? <div className="space-y-3 p-5 text-center"><p role="alert" className="text-sm leading-6 text-red-300">{error}</p><Button variant="secondary" size="sm" onClick={async () => { setLoading(true); await fetchRequests(); }}>Try again</Button></div> : filteredRequests.length === 0 ? (
           <div className="flex flex-col items-center p-6 text-center"><Inbox className="mb-3 size-7 text-muted-foreground" aria-hidden="true" /><p className="text-sm font-medium text-secondary-foreground">{hasFilters ? "No matching requests" : "Waiting for requests"}</p><p className="mt-2 text-sm leading-6 text-muted-foreground">{hasFilters ? "Try another request ID or clear your filters." : "Requests sent to this endpoint will appear here automatically."}</p></div>
         ) : filteredRequests.map((request) => (
-          <button key={request.id} type="button" aria-pressed={selectedRequest?.id === request.id} onClick={() => { setSelectedRequest(request); setShowRequestDrawer(false); }} className={`block w-full min-w-0 border-b border-l-2 border-b-border-subtle px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70 ${selectedRequest?.id === request.id ? "border-l-accent bg-surface-selected" : "border-l-transparent hover:bg-surface-raised"}`}>
-            <span className="mb-2 flex items-center justify-between gap-2"><MethodBadge method={request.method} /><span className="text-xs text-muted-foreground">{formatTime(request.receivedAt)}</span></span>
+          <button key={request.id} type="button" aria-pressed={selectedRequest?.id === request.id} onClick={() => { setSelectedRequest(request); setShowRequestDrawer(false); }} className={`block w-full min-w-0 border-b border-l-2 border-b-border-subtle px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70 ${selectedRequest?.id === request.id ? "border-l-accent bg-surface-selected" : "border-l-transparent hover:bg-surface-raised"}`}>
+            <span className="mb-1 flex items-center justify-between gap-2"><MethodBadge method={request.method} /><span className="text-right text-xs tabular-nums text-muted-foreground">{formatDate(request.receivedAt)} · {formatTime(request.receivedAt)}</span></span>
             <span className="block truncate font-mono text-sm text-secondary-foreground" title={request.id}>{request.id}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{formatDate(request.receivedAt)}</span>
           </button>
         ))}
       </div>
-      <nav aria-label="Request pagination" className="flex shrink-0 items-center justify-between gap-2 border-t border-border-subtle p-3">
-        <Button variant="outline" size="icon" aria-label="Previous page" disabled={loading || currentPage === 1} onClick={() => { setLoading(true); setCurrentPage((page) => Math.max(1, page - 1)); }}><ChevronLeft className="size-4" aria-hidden="true" /></Button>
+      <nav aria-label="Request pagination" className="flex shrink-0 items-center justify-between gap-2 border-t border-border-subtle px-2 py-1.5">
+        <Button variant="outline" size="icon" className="size-10 lg:size-8" aria-label="Previous page" disabled={loading || currentPage === 1} onClick={() => { setLoading(true); setCurrentPage((page) => Math.max(1, page - 1)); }}><ChevronLeft className="size-4" aria-hidden="true" /></Button>
         <span className="text-center text-xs text-muted-foreground" aria-live="polite">Page <span className="font-medium text-secondary-foreground">{currentPage}</span> of {totalPages}</span>
-        <Button variant="outline" size="icon" aria-label="Next page" disabled={loading || currentPage >= totalPages} onClick={() => { setLoading(true); setCurrentPage((page) => Math.min(totalPages, page + 1)); }}><ChevronRight className="size-4" aria-hidden="true" /></Button>
+        <Button variant="outline" size="icon" className="size-10 lg:size-8" aria-label="Next page" disabled={loading || currentPage >= totalPages} onClick={() => { setLoading(true); setCurrentPage((page) => Math.min(totalPages, page + 1)); }}><ChevronRight className="size-4" aria-hidden="true" /></Button>
       </nav>
     </>
   );
 
   return (
     <ProtectedRoute>
-      <div className="min-h-dvh bg-background text-foreground">
-        <AppHeader breadcrumbs={[{ label: "Workspaces", href: "/workspace" }, { label: workspaceName || "Workspace", href: `/workspace/${workspaceId}` }, { label: endpointName || "Endpoint" }]} />
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Endpoint inspector</p>
-              <h1 className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-3xl [overflow-wrap:anywhere]">{endpointName || "Endpoint"}</h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">Inspect incoming requests and replay them to test your integrations.</p>
-            </div>
+      <div className="min-h-dvh bg-background text-foreground lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden">
+        <AppHeader compact breadcrumbs={[{ label: "Workspaces", href: "/workspace" }, { label: workspaceName || "Workspace", href: `/workspace/${workspaceId}` }, { label: endpointName || "Endpoint" }]} />
+        <main className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:px-8 lg:py-3">
+          <div className="mb-3 flex min-w-0 shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-foreground [overflow-wrap:anywhere]">{endpointName || "Endpoint"}</h1>
             <div className="flex shrink-0 items-center gap-2">
               <Button variant="secondary" className="lg:hidden" aria-haspopup="dialog" aria-expanded={showRequestDrawer} onClick={() => setShowRequestDrawer(true)}><Menu className="size-4" aria-hidden="true" />Requests<span className="rounded bg-surface-elevated px-1.5 py-0.5 text-xs tabular-nums">{totalRequests}</span></Button>
-              <Button variant="outline" size="icon" aria-label="Endpoint settings" title="Endpoint settings" aria-haspopup="dialog" aria-expanded={settingsView !== null} onClick={() => setSettingsView("menu")}><Settings className="size-4" aria-hidden="true" /></Button>
+              <Button variant="outline" size="icon" className="lg:size-8" aria-label="Endpoint settings" title="Endpoint settings" aria-haspopup="dialog" aria-expanded={settingsView !== null} onClick={() => setSettingsView("menu")}><Settings className="size-4" aria-hidden="true" /></Button>
             </div>
           </div>
-          <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
-            <aside aria-label="Incoming requests" className="hidden min-w-0 overflow-hidden rounded-xl border-2 border-border-default bg-surface shadow-panel lg:block">
+          <div className="grid min-w-0 items-start gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[300px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch xl:grid-cols-[340px_minmax(0,1fr)]">
+            <aside aria-label="Incoming requests" className="hidden min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border-2 border-border-default bg-surface shadow-panel lg:flex">
               {renderRequestList("sidebar")}
             </aside>
-            <section aria-label="Request details" className="min-w-0 scroll-mt-6">
+            <section aria-label="Request details" className="min-w-0 scroll-mt-6 lg:flex lg:min-h-0 lg:flex-col">
               {selectedRequest ? (
-                <div className="min-w-0 overflow-hidden rounded-xl border-2 border-border-default bg-surface shadow-panel">
-                  <div className="flex min-w-0 flex-col gap-4 border-b border-border-subtle p-4 sm:p-5 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="min-w-0"><div className="mb-3 flex items-center gap-2"><MethodBadge method={selectedRequest.method} /><h2 className="text-sm font-semibold">Request details</h2></div><p className="break-all font-mono text-sm leading-6 text-secondary-foreground">{selectedRequest.id}</p><p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs leading-5 text-muted-foreground"><Clock className="size-3.5" aria-hidden="true" />{formatDate(selectedRequest.receivedAt)} at {formatTime(selectedRequest.receivedAt)}</p></div>
-                    <Button variant="primary" onClick={openReplay} className="shrink-0 self-start"><Play className="size-4" aria-hidden="true" />Replay request</Button>
+                <div className="min-w-0 overflow-hidden rounded-xl border-2 border-border-default bg-surface shadow-panel lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+                  <div className="flex min-w-0 shrink-0 flex-col gap-2 border-b border-border-subtle px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 flex-1"><h2 className="sr-only">Request details</h2><div className="flex min-w-0 items-center gap-2"><MethodBadge method={selectedRequest.method} /><p className="min-w-0 break-all font-mono text-sm leading-5 text-secondary-foreground">{selectedRequest.id}</p></div><p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs leading-4 text-muted-foreground"><Clock className="size-3.5" aria-hidden="true" />{formatDate(selectedRequest.receivedAt)} at {formatTime(selectedRequest.receivedAt)}</p></div>
+                    <Button variant="primary" size="sm" onClick={openReplay} className="h-10 shrink-0 self-start lg:h-8 lg:self-center"><Play className="size-4" aria-hidden="true" />Replay request</Button>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle p-3 sm:px-5">
-                    <div className="flex rounded-lg bg-background p-1" role="group" aria-label="Request content">{(["body", "headers"] as const).map((tab) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-10 rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${activeTab === tab ? "bg-surface-selected text-foreground ring-1 ring-inset ring-border-strong" : "text-muted-foreground hover:text-foreground"}`}>{tab === "body" ? "Body" : "Headers"}</button>)}</div>
-                    <Button variant="ghost" size="sm" onClick={async () => await copyToClipboard(activeTab === "body" ? bodyString(selectedRequest.body) : JSON.stringify(selectedRequest.headers, null, 2), activeTab === "body" ? "Request body" : "Request headers")}><Copy className="size-4" aria-hidden="true" />Copy</Button>
+                  <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border-subtle px-3 py-1.5">
+                    <div className="flex shrink-0 rounded-lg bg-background" role="group" aria-label="Request content">{(["body", "headers"] as const).map((tab) => <button key={tab} type="button" aria-pressed={activeTab === tab} onClick={() => setActiveTab(tab)} className={`min-h-10 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:min-h-8 ${activeTab === tab ? "bg-surface-selected text-foreground ring-1 ring-inset ring-border-strong" : "text-muted-foreground hover:text-foreground"}`}>{tab === "body" ? "Body" : "Headers"}</button>)}</div>
+                    {activeTab === "body" && requestContentType && <span className="order-last w-full min-w-0 truncate font-mono text-xs text-muted-foreground sm:order-none sm:w-auto sm:flex-1" title={requestContentType}>{requestContentType}</span>}
+                    <Button variant="ghost" size="sm" className="ml-auto h-10 px-2 lg:h-8" onClick={async () => await copyToClipboard(activeTab === "body" ? bodyString(selectedRequest.body) : JSON.stringify(selectedRequest.headers, null, 2), activeTab === "body" ? "Request body" : "Request headers")}><Copy className="size-4" aria-hidden="true" />Copy</Button>
                   </div>
-                  {activeTab === "body" ? <div>{requestContentType && <div className="break-words border-b border-border-subtle px-4 py-3 font-mono text-xs text-muted-foreground sm:px-5 [overflow-wrap:anywhere]">{requestContentType}</div>}<div className="max-h-[65dvh] overflow-auto p-4 sm:p-5">{selectedRequest.body === null || selectedRequest.body === undefined || selectedRequest.body === "" ? <p className="text-sm text-muted-foreground">This request has no body.</p> : <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground [overflow-wrap:anywhere]">{bodyString(selectedRequest.body)}</pre>}</div></div> : <HeaderList headers={selectedRequest.headers || {}} />}
+                  {activeTab === "body" ? (
+                    <div className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+                      <div role="region" aria-label="Request body" tabIndex={0} className="max-h-[65dvh] overflow-auto overscroll-contain p-3 lg:min-h-0 lg:max-h-none lg:flex-1">
+                        {selectedRequest.body === null || selectedRequest.body === undefined || selectedRequest.body === "" ? <p className="text-sm text-muted-foreground">This request has no body.</p> : <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-7 text-foreground [overflow-wrap:anywhere]">{bodyString(selectedRequest.body)}</pre>}
+                      </div>
+                    </div>
+                  ) : <div role="region" aria-label="Request headers" tabIndex={0} className="max-h-[65dvh] overflow-auto overscroll-contain lg:min-h-0 lg:max-h-none lg:flex-1"><HeaderList headers={selectedRequest.headers || {}} /></div>}
                 </div>
-              ) : <div className="flex min-h-72 flex-col items-center justify-center rounded-xl border-2 border-dashed border-border-default bg-surface p-6 text-center"><AlertCircle className="mb-4 size-8 text-muted-foreground" aria-hidden="true" /><h2 className="text-base font-medium text-secondary-foreground">Your request details appear here</h2><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Select an incoming request to inspect its headers, body, and replay options.</p></div>}
+              ) : <div className="flex min-h-72 flex-col items-center justify-center overflow-auto rounded-xl border-2 border-dashed border-border-default bg-surface p-6 text-center lg:min-h-0 lg:flex-1"><AlertCircle className="mb-4 size-8 shrink-0 text-muted-foreground" aria-hidden="true" /><h2 className="text-base font-medium text-secondary-foreground">Your request details appear here</h2><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Select an incoming request to inspect its headers, body, and replay options.</p></div>}
             </section>
           </div>
         </main>
