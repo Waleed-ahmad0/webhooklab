@@ -16,7 +16,7 @@ export function AppHeader({ breadcrumbs = [], actions }: AppHeaderProps) {
   const pathname = usePathname();
 
   return (
-    <header className="relative z-20 shrink-0 border-b-2 border-border-subtle bg-surface">
+    <header className="relative z-20 shrink-0 border-b-2 border-border-subtle bg-navigation">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-3 py-3">
           <Link href="/" aria-label="WebhookLab home" className="flex shrink-0 items-center gap-2 rounded-lg text-base font-semibold tracking-tight text-foreground">
@@ -26,11 +26,11 @@ export function AppHeader({ breadcrumbs = [], actions }: AppHeaderProps) {
             WebhookLab
           </Link>
           <nav aria-label="Main navigation" className="ml-auto flex items-center gap-1 sm:gap-2">
-            <Link href="/workspace" aria-label="Workspaces" aria-current={pathname === "/workspace" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", pathname.startsWith("/workspace") && "bg-surface-selected text-foreground ring-1 ring-inset ring-border-default")}>
+            <Link href="/workspace" aria-label="Workspaces" aria-current={pathname === "/workspace" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", pathname.startsWith("/workspace") && "bg-surface-raised text-foreground ring-1 ring-inset ring-border-default")}>
               <FolderOpen className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Workspaces</span>
             </Link>
-            <Link href="/profile" aria-label="Profile" aria-current={pathname === "/profile" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", pathname === "/profile" && "bg-surface-selected text-foreground ring-1 ring-inset ring-border-default")}>
+            <Link href="/profile" aria-label="Profile" aria-current={pathname === "/profile" ? "page" : undefined} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-10 px-3", pathname === "/profile" && "bg-surface-raised text-foreground ring-1 ring-inset ring-border-default")}>
               <User className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Profile</span>
             </Link>

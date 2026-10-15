@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* Neutral Gray scale: https://www.radix-ui.com/colors */
-  --color-background: #111111;
+  /* Radix Neutral Gray, adapted for deeper charcoal surfaces. */
+  --color-background: #030303;
+  --color-navigation: #010101;
   --color-foreground: #eeeeee;
-  --color-surface: #191919;
-  --color-surface-raised: #222222;
-  --color-surface-elevated: #2a2a2a;
-  --color-surface-selected: #313131;
+  --color-surface: #080808;
+  --color-surface-raised: #0d0d0d;
+  --color-surface-elevated: #141414;
+  --color-surface-selected: #1a1a1a;
   --color-secondary-foreground: #d4d4d4;
   --color-muted-foreground: #b4b4b4;
   --color-border-subtle: #3a3a3a;

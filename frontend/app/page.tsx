@@ -38,7 +38,7 @@ const features = [
 export default function Home() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b-2 border-border-subtle bg-surface">
+      <header className="sticky top-0 z-30 border-b-2 border-border-subtle bg-navigation">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" aria-label="WebhookLab home" className="inline-flex min-h-10 items-center gap-2 rounded-md font-semibold tracking-tight">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white">
