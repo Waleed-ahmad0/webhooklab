@@ -47,7 +47,6 @@ app.patch('/webhook/api/workspace/:workspaceId', requireAuth, updateWorkspaceFun
 
 app.delete('/webhook/api/endpoint', requireAuth, deleteenpoint)
 app.delete('/webhook/api/workspace/:workspaceId', requireAuth, deleteWorkspaceFunc)
-// app.delete('/webhook/api/workspaces/endpoints/:workspaceId', requireAuth) // get all the endpoints of a specific workspace // 
 
 app.all('/webhook/api/h/:token', receiveWebhook) // creating webhook request of an endpoint
 

@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { getToken } from "@auth/core/jwt";
-import { resolve } from "node:dns";
 
 export async function workspaceFunc(req: Request, res: Response) {
     try {
@@ -99,7 +98,6 @@ export async function deleteWorkspaceFunc(req: Request, res: Response) {
         const endpoints = workspace.endpoints
 
         const github_endpoints = endpoints.filter(e => e.githubRepoId)
-
         const githubResults = await Promise.all(
             github_endpoints.map(async (e) => {
                 const githubRepo = e.githubRepo;
@@ -171,28 +169,3 @@ export async function deleteWorkspaceFunc(req: Request, res: Response) {
         return res.status(500).json({ error: "internal server error" });
     }
 }
-// export async function deleteAllWorkspaceEndpoints(req: Request, res: Response) {
-
-//     const userId = req.userId;
-//     const workspaceIdParam = req.params.workspaceId;
-//     const workspaceId = Array.isArray(workspaceIdParam) ? workspaceIdParam[0] : workspaceIdParam;
-
-//     const token = await getToken({
-//         req: { headers: new Headers(req.headers as Record<string, string>) },
-//         secret: process.env.AUTH_SECRET!
-//     });
-//     if (!workspaceId) {
-//         return res.status(400).json({ error: "id is missing" })
-//     }
-//     const getworkspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, include: { endpoints: true } })
-//     if (!getworkspace) {
-//         return res.status(404).json({ error: "workspace not found" })
-//     }
-//     if (userId !== getworkspace.ownerId) {
-//         return res.status(401).json({ error: "unauthorized" })
-
-//     }
-//     const endpoints = getworkspace.endpoints
-//     const github_endpoints = endpoints.filter(e => e.githubRepoId)
-
-// }
