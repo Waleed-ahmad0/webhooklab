@@ -97,7 +97,7 @@ export async function deleteWorkspaceFunc(req: Request, res: Response) {
         }
         const endpoints = workspace.endpoints
 
-        const github_endpoints = endpoints.filter(e => e.githubRepoId)
+        const github_endpoints = endpoints.filter(e => e.githubhookId)
         const githubResults = await Promise.all(
             github_endpoints.map(async (e) => {
                 const githubRepo = e.githubRepo;

@@ -242,19 +242,6 @@ export const authConfig = {
         token.githubAccessToken = account.access_token;
       }
 
-      if (trigger === "update" && session?.user) {
-        const { id, firstName, lastName, profileImage, authMethods, ...rest } = session.user
-        token = {
-          ...token,
-          ...rest,
-          id: id || token.id,
-          firstName: firstName || token.firstName,
-          lastName: lastName || token.lastName,
-          profileImage: profileImage || token.profileImage,
-          authMethods: authMethods || token.authMethods,
-        }
-      }
-
       return token
     },
 

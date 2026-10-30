@@ -97,6 +97,17 @@ export async function deleteenpoint(req: Request, res: Response) {
         if (('error' in checkowner)) return res.status(checkowner.status as number).json({ error: checkowner.error });
         if (!('endpoint' in checkowner)) return res.status(404).json({ error: 'Endpoint not found' });
         const endpoint = checkowner.endpoint;
+        if (message !== "delete" && message !== "disconnect") {
+            return res.status(400).json({
+                error: "Invalid operation"
+            });
+        }
+
+        if (typeof endpointId !== "string" || !endpointId) {
+            return res.status(400).json({
+                error: "Invalid endpoint ID"
+            });
+        }
         if (endpoint.githubhookId != null && !token?.githubAccessToken) {
             return res.status(403).json({
                 error: "GitHub authentication required to delete this endpoint"
