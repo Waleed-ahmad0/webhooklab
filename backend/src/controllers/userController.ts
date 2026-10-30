@@ -24,8 +24,23 @@ export async function getuserdata(req: Request, res: Response) {
         if (!userId) {
             return res.status(401).json({ error: 'unauthorized' })
         }
-        const getdata = await prisma.user.findUnique({ where: { id: userId } })
-        res.status(200).json(getdata)
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                profileImage: true,
+                authMethods: true,
+                isActive: true,
+                isEmailVerified: true,
+                lastLogin: true,
+                createdAt: true,
+            }
+        }); if (!user) {
+            return res.status(404).json({ error: "account not found" })
+        }
+        res.status(200).json(user)
     } catch (error) {
         console.error(error)
         res.status(500).json({ error: 'internal server error' })
@@ -104,9 +119,6 @@ export async function deleteuser(req: Request, res: Response) {
                 }
             })
         )
-        const successfulGitHubIds = githubResults
-            .filter(result => result.success)
-            .map(result => result.endpointId);
         await prisma.user.delete({ where: { id: finduser?.id } })
 
         return res.status(200).json({ success: true, message: "user account deleted" });

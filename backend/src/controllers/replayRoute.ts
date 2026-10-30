@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { assertSafeReplayTarget } from "../lib/ipcheck";
+import { createSafeReplayAgent } from "../lib/ipcheck";
+import { fetch } from "undici";
 import { checkEndpointOwnership } from "../lib/authorizations";
 
 export const replayRequest = async (req: Request, res: Response) => {
@@ -41,54 +42,75 @@ export const replayRequest = async (req: Request, res: Response) => {
                 bodyToSend = storedRequest.body ? JSON.stringify(storedRequest.body) : undefined;
             }
         }
+        let agent: ReturnType<typeof createSafeReplayAgent>;
 
         try {
-            await assertSafeReplayTarget(finalUrl);
-        } catch (err) {
-            return res.status(400).json({ error: (err as Error).message });
+            agent = createSafeReplayAgent(finalUrl);
+        } catch (error) {
+            return res.status(400).json({
+                error: (error as Error).message,
+            });
         }
 
-        const start = Date.now();
-        const replayResponse = await fetch(finalUrl, {
-            redirect: 'manual',
-            method: methodToUse,
-            headers: headersToReplay,
-            body: bodyToSend,
-            signal: AbortSignal.timeout(10_000),
-
-        });
-        const duration = Date.now() - start;
-
-        const responseHeaders: Record<string, string> = {};
-        replayResponse.headers.forEach((v, k) => {
-            responseHeaders[k] = v;
-        });
-
-        let responseText: string | null = null;
         try {
-            responseText = await replayResponse.text();
-        } catch (e) {
-            responseText = null;
-        }
-        let parsedBody: any = null;
-        if (responseText) {
-            try {
-                parsedBody = JSON.parse(responseText);
-            } catch (e) {
-                parsedBody = responseText;
+            const start = Date.now();
+
+            const replayResponse = await fetch(finalUrl, {
+                dispatcher: agent,
+                redirect: "manual",
+                method: methodToUse,
+                headers: headersToReplay,
+                body: bodyToSend,
+                signal: AbortSignal.timeout(10_000),
+            });
+
+            const duration = Date.now() - start;
+
+            // Reject redirects without following them
+            if (replayResponse.status >= 300 && replayResponse.status < 400) {
+                await replayResponse.body?.cancel();
+
+                return res.status(400).json({
+                    error: "Target attempted a redirect — not followed for safety"
+                });
             }
+
+            const responseHeaders: Record<string, string> = {};
+
+            replayResponse.headers.forEach((v, k) => {
+                responseHeaders[k] = v;
+            });
+
+            let responseText: string | null = null;
+
+            try {
+                responseText = await replayResponse.text();
+            } catch (error) {
+                throw error;
+            }
+
+            let parsedBody: any = null;
+
+            if (responseText) {
+                try {
+                    parsedBody = JSON.parse(responseText);
+                } catch {
+                    parsedBody = responseText;
+                }
+            }
+
+            return res.status(200).json({
+                replayed: true,
+                status: replayResponse.status,
+                statusText: replayResponse.statusText || "",
+                duration,
+                responseHeaders,
+                responseBody: parsedBody,
+            });
+
+        } finally {
+            await agent.close();
         }
-        if (replayResponse.status >= 300 && replayResponse.status < 400) {
-            return res.status(400).json({ error: "Target attempted a redirect — not followed for safety" });
-        }
-        return res.status(200).json({
-            replayed: true,
-            status: replayResponse.status,
-            statusText: (replayResponse as any).statusText || '',
-            duration,
-            responseHeaders,
-            responseBody: parsedBody,
-        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ error: "Replay failed " });

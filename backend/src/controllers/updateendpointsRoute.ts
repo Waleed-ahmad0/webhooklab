@@ -11,7 +11,7 @@ async function webhookDelete(owner: string, repoName: string, githubhookId: numb
             headers: { Authorization: `Bearer ${githubAccessToken}` },
         }
     );
-        if (ghRes.ok || ghRes.status === 404 || ghRes.status === 204) {
+    if (ghRes.ok || ghRes.status === 404 || ghRes.status === 204) {
         return { message: true }
 
     }
@@ -97,14 +97,19 @@ export async function deleteenpoint(req: Request, res: Response) {
         if (('error' in checkowner)) return res.status(checkowner.status as number).json({ error: checkowner.error });
         if (!('endpoint' in checkowner)) return res.status(404).json({ error: 'Endpoint not found' });
         const endpoint = checkowner.endpoint;
+        if (endpoint.githubhookId != null && !token?.githubAccessToken) {
+            return res.status(403).json({
+                error: "GitHub authentication required to delete this endpoint"
+            });
+        }
         let owner, repoName;
         if (endpoint.githubRepo && typeof endpoint.githubRepo === "string") {
             [owner, repoName] = endpoint.githubRepo.split("/");
         }
-        if (owner && repoName && endpoint.githubhookId && token?.githubAccessToken && message === 'disconnect') {
+        else if (owner && repoName && endpoint.githubhookId && token?.githubAccessToken && message === 'disconnect') {
             const response = await webhookDelete(owner, repoName, endpoint.githubhookId, token?.githubAccessToken)//
             if (response.message) {
-                await prisma.endpoint.update({ where: { id: endpoint.id }, data: { githubhookId: null} })
+                await prisma.endpoint.update({ where: { id: endpoint.id }, data: { githubhookId: null } })
                 return res.status(200).json({ message: "successfully disconnected " })
 
             } else {
@@ -131,7 +136,7 @@ export async function deleteenpoint(req: Request, res: Response) {
 
         }
     } catch (error) {
-        return res.status(500).json({ errors: "internal server error"})
+        return res.status(500).json({ errors: "internal server error" })
 
     }
 }

@@ -70,7 +70,7 @@ export const webhookendpoint = async (req: Request, res: Response) => {
               id: existingEndpoint.id
             },
             data: {
-              githubhookId: data.data.id, events:selectedEvents
+              githubhookId: data.data.id, events: selectedEvents
             }
           })
           return res.status(data.status).json({ message: 'endpoint connected' })

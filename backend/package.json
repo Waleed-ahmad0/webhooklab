@@ -22,7 +22,9 @@
     "dotenv": "^17.4.2",
     "env": "^0.0.2",
     "express": "^5.2.1",
-    "pg": "^8.23.0"
+    "ipaddr.js": "^2.5.0",
+    "pg": "^8.23.0",
+    "undici": "^8.12.3"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
