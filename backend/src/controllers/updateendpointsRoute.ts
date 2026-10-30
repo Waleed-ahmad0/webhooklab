@@ -106,7 +106,12 @@ export async function deleteenpoint(req: Request, res: Response) {
         if (endpoint.githubRepo && typeof endpoint.githubRepo === "string") {
             [owner, repoName] = endpoint.githubRepo.split("/");
         }
-        else if (owner && repoName && endpoint.githubhookId && token?.githubAccessToken && message === 'disconnect') {
+        if (endpoint.githubhookId != null && (!owner || !repoName)) {
+            return res.status(400).json({
+                error: "Invalid GitHub repository configuration"
+            });
+        }
+        if (owner && repoName && endpoint.githubhookId && token?.githubAccessToken && message === 'disconnect') {
             const response = await webhookDelete(owner, repoName, endpoint.githubhookId, token?.githubAccessToken)//
             if (response.message) {
                 await prisma.endpoint.update({ where: { id: endpoint.id }, data: { githubhookId: null } })
